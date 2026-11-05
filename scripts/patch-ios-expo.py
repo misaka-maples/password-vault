@@ -283,6 +283,45 @@ inline jsi::JSError errorFromMovedValue(jsi::IRuntime &runtime, jsi::Value *valu
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
+    elif filename == 'JavaScriptObject.swift':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            target = """    // The isolated closure below runs synchronously on this thread.
+    nonisolated(unsafe) let slot = buffer.baseAddress!
+    expo.emplaceUndefined(slot)
+    defer {
+      expo.destroyValues(slot, 1)
+    }
+    // The runtime can't be deallocated during a call on its JavaScript thread, so it's borrowed without
+    // a retain.
+    try runtime._withUnsafeGuaranteedRef { runtime in
+      try JavaScriptActor.assumeIsolated {
+        try encode(JavaScriptValue.Slot(slot), runtime)
+      }
+    }"""
+            replacement = """    // The isolated closure below runs synchronously on this thread.
+    let slotBox = UncheckedSendable(buffer.baseAddress!)
+    let slot = slotBox.value
+    expo.emplaceUndefined(slot)
+    defer {
+      expo.destroyValues(slot, 1)
+    }
+    // The runtime can't be deallocated during a call on its JavaScript thread, so it's borrowed without
+    // a retain.
+    try runtime._withUnsafeGuaranteedRef { runtime in
+      try JavaScriptActor.assumeIsolated {
+        try encode(JavaScriptValue.Slot(slotBox.value), runtime)
+      }
+    }"""
+            if target in c:
+                c = c.replace(target, replacement)
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched JavaScriptObject.swift: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
     elif filename == 'HostObjectCallbacks.h':
         try:
             with open(p, 'r', encoding='utf-8') as fp:
