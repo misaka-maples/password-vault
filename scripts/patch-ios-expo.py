@@ -225,18 +225,61 @@ def patch_file(p):
         try:
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
-            if 'createHostFunctionClosure' not in c:
+            mod = False
+            if 'createHostFunctionClosure' in c and 'HostFunctionClosure *_Nonnull createHostFunctionClosure' not in c:
+                c = c.replace('HostFunctionClosure *createHostFunctionClosure', 'HostFunctionClosure *_Nonnull createHostFunctionClosure')
+                mod = True
+            elif 'createHostFunctionClosure' not in c:
                 marker = '} SWIFT_IMMORTAL_REFERENCE; // class HostFunctionClosure'
                 factory = """} SWIFT_IMMORTAL_REFERENCE; // class HostFunctionClosure
 
-inline HostFunctionClosure *createHostFunctionClosure(RetainedSwiftPointer::Context context, HostFunctionClosure::Closure closure, RetainedSwiftPointer::Deallocator deallocator) {
+inline HostFunctionClosure *_Nonnull createHostFunctionClosure(RetainedSwiftPointer::Context context, HostFunctionClosure::Closure closure, RetainedSwiftPointer::Deallocator deallocator) {
   return new HostFunctionClosure(context, closure, deallocator);
 }"""
                 if marker in c:
                     c = c.replace(marker, factory)
+                    mod = True
+            if mod:
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched HostFunctionClosure.h: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
+    elif filename == 'JSIUtils.h':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            if 'errorFromMovedValue' not in c:
+                target = """inline jsi::JSError errorFromValue(jsi::IRuntime &runtime, jsi::Value value) {
+  return jsi::JSError(runtime, std::move(value));
+}"""
+                replacement = """inline jsi::JSError errorFromValue(jsi::IRuntime &runtime, jsi::Value value) {
+  return jsi::JSError(runtime, std::move(value));
+}
+
+inline jsi::JSError errorFromMovedValue(jsi::IRuntime &runtime, jsi::Value *value) {
+  return jsi::JSError(runtime, std::move(*value));
+}"""
+                if target in c:
+                    c = c.replace(target, replacement)
                     with open(p, 'w', encoding='utf-8') as fp:
                         fp.write(c)
-                    print(f"Patched HostFunctionClosure.h: {p}")
+                    print(f"Patched JSIUtils.h: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
+    elif filename == 'JavaScriptError.swift':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            target = "self.pointee = expo.errorFromValue(runtime.pointee, value.pointee)"
+            replacement = "self.pointee = expo.errorFromMovedValue(runtime.pointee, &value.pointee)"
+            if target in c:
+                c = c.replace(target, replacement)
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched JavaScriptError.swift: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
