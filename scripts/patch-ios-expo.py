@@ -8,12 +8,11 @@ def patch_file(p):
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
             mod = False
-            # Revert any v5 back to v6 if it was changed
-            if 'swiftLanguageModes: [.v5]' in c:
-                c = c.replace('swiftLanguageModes: [.v5]', 'swiftLanguageModes: [.v6]')
-                mod = True
             if 'swift-tools-version: 6.2' in c:
                 c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0')
+                mod = True
+            if 'swiftLanguageModes: [.v5]' in c:
+                c = c.replace('swiftLanguageModes: [.v5]', 'swiftLanguageModes: [.v6]')
                 mod = True
             if '"-Werror", "ImplicitStrongCapture",' in c:
                 c = c.replace('"-Werror", "ImplicitStrongCapture",', '')
@@ -21,6 +20,18 @@ def patch_file(p):
             if '"-Werror", "NoUsage",' in c:
                 c = c.replace('"-Werror", "NoUsage",', '')
                 mod = True
+            if '.enableUpcomingFeature("NonisolatedNonsendingByDefault"),' in c:
+                c = c.replace('.enableUpcomingFeature("NonisolatedNonsendingByDefault"),', '')
+                mod = True
+            if '.enableUpcomingFeature("InferIsolatedConformances"),' in c:
+                c = c.replace('.enableUpcomingFeature("InferIsolatedConformances"),', '')
+                mod = True
+            if '"-warn-concurrency"' not in c:
+                marker = '"-no-verify-emitted-module-interface",'
+                repl = '"-no-verify-emitted-module-interface",\n          "-Xfrontend", "-warn-concurrency",'
+                if marker in c:
+                    c = c.replace(marker, repl)
+                    mod = True
             if mod:
                 with open(p, 'w', encoding='utf-8') as fp:
                     fp.write(c)
@@ -32,13 +43,11 @@ def patch_file(p):
         try:
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
-            target = '@JavaScriptActor\n    func call('
-            repl = '@JavaScriptActor\n    @Sendable\n    func call('
-            if target in c:
-                c = c.replace(target, repl)
+            if '@JavaScriptActor\n    @Sendable\n    func call(' in c:
+                c = c.replace('@JavaScriptActor\n    @Sendable\n    func call(', '@JavaScriptActor\n    func call(')
                 with open(p, 'w', encoding='utf-8') as fp:
                     fp.write(c)
-                print(f"Patched @Sendable in JavaScriptCallback.swift: {p}")
+                print(f"Reverted @Sendable on local func call in JavaScriptCallback.swift: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
