@@ -75,9 +75,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          VERSION_CODE=$(node -p "require('./app.json').expo.android.versionCode || 1")
           # 使用国内高速加速镜像前缀，确保国内手机移动蜂窝网也能极速一键在线下载
           DOWNLOAD_URL="https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
-          echo "正在自动将版本 $VERSION 同步至 Supabase: $DOWNLOAD_URL"
+          echo "正在自动将版本 $VERSION (code: $VERSION_CODE) 同步至 Supabase: $DOWNLOAD_URL"
           curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
             -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
             -H "Authorization: Bearer sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
@@ -85,9 +86,9 @@ jobs:
             -H "Prefer: return=minimal" \
             -d "{
               \"version\": \"${VERSION}\",
-              \"version_code\": ${GITHUB_RUN_NUMBER},
-              \"title\": \"v${VERSION} 发现新版本\",
-              \"release_notes\": \"1. 性能优化与修复已知问题；\n2. 支持软件内在线一键升级。\",
+              \"version_code\": ${VERSION_CODE},
+              \"title\": \"v${VERSION} 体验优化与更新\",
+              \"release_notes\": \"1. 统一插画拟物风主题弹窗；\n2. 修复更新下载取消按钮显示；\n3. 接入高速下载节点，免翻墙直接在线升级。\",
               \"download_url\": \"${DOWNLOAD_URL}\",
               \"file_size\": \"65 MB\"
             }" || true

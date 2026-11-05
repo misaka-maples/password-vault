@@ -64,9 +64,12 @@ export async function checkForUpdates(): Promise<CheckUpdateResult> {
         publishedAt: data.published_at,
       };
 
+      const verDiff = compareVersions(release.version, APP_VERSION);
+      // 只有当云端版本号严格高于本地 (如 1.0.2 > 1.0.1)，
+      // 或主版本相同但内部构建号严格高于本地时才触发更新
       const hasNew =
-        release.versionCode > APP_BUILD_NUMBER ||
-        compareVersions(release.version, APP_VERSION) > 0;
+        verDiff > 0 ||
+        (verDiff === 0 && release.versionCode > APP_BUILD_NUMBER);
 
       return {
         hasUpdate: hasNew,
