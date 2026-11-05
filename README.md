@@ -62,6 +62,16 @@ cd android
 ```
 编译产物位于：`android/app/build/outputs/apk/release/app-release.apk`。
 
+### 4. GitHub Actions 云端自动化打包
+本项目已内置完整的 GitHub Actions 持续集成流程（`.github/workflows/build-apk.yml`）：
+- **网页一键打包**：在 GitHub 仓库点击 **Actions ➔ Build Android APK ➔ Run workflow**，即可在线自动打包并直接下载 APK；
+- **打 Tag 自动发版**：推送类似 `v1.0.1` 标签时，GitHub 会自动编译并在 Releases 中发布带有下载链接的全新版本：
+  ```bash
+  git tag v1.0.1
+  git push origin v1.0.1
+  ```
+  生成的 Release APK 下载直链可直接粘贴到 Supabase 的 `download_url` 字段，实现全自动化版本推送！
+
 ---
 
 ## ☁️ Supabase 云端与更新服务配置
