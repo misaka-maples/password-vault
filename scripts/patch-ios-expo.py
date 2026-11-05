@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 
 def patch_file(p):
     filename = os.path.basename(p)
@@ -67,10 +68,44 @@ def patch_file(p):
                 c = c.replace('return expo.HostFunctionClosure(context, call, deallocate)', 'return expo.createHostFunctionClosure(context, call, deallocate)')
                 mod = True
 
+            # 4. Optional borrowing Setter compiler crash fix
+            old_set_guard = """        guard let set = context.set else {
+          // Unreachable in practice: when the user passed `nil` for `set`, the call site
+          // below creates the read-only `expo.HostObjectCallbacks` without a setter, and
+          // `HostObjectCallbacks::set` throws a `jsi::JSError` directly instead of
+          // calling back into Swift. Trap loudly so a future C++ refactor can't silently
+          // swallow assignments.
+          FatalError.readOnlyHostObjectSetterInvoked()
+        }"""
+            if old_set_guard in c:
+                c = c.replace(old_set_guard, "        let set = context.set")
+                mod = True
+            elif 'guard let set = context.set else {' in c:
+                c = re.sub(r'guard let set = context\.set else \{.*?FatalError\.readOnlyHostObjectSetterInvoked\(\)\s*\}', 'let set = context.set', c, flags=re.DOTALL)
+                mod = True
+
             if mod:
                 with open(p, 'w', encoding='utf-8') as fp:
                     fp.write(c)
                 print(f"Patched JavaScriptRuntime.swift: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
+    elif filename == 'HostObjectContext.swift':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            mod = False
+            if '  let set: Setter?' in c:
+                c = c.replace('  let set: Setter?', '  let set: Setter')
+                mod = True
+            if '    self.set = set\n' in c:
+                c = c.replace('    self.set = set\n', '    self.set = set ?? { _, _ in FatalError.readOnlyHostObjectSetterInvoked() }\n')
+                mod = True
+            if mod:
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched HostObjectContext.swift: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
