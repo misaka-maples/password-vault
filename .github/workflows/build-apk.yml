@@ -68,3 +68,23 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ☁️ 自动同步新版本至 Supabase 发版表
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DOWNLOAD_URL="https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/密码保险库.apk"
+          echo "正在自动将版本 $VERSION 同步至 Supabase: $DOWNLOAD_URL"
+          curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
+            -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
+            -H "Authorization: Bearer sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            -d "{
+              \"version\": \"${VERSION}\",
+              \"version_code\": ${GITHUB_RUN_NUMBER},
+              \"title\": \"v${VERSION} 发现新版本\",
+              \"release_notes\": \"1. 性能优化与修复已知问题；\n2. 支持软件内在线一键升级。\",
+              \"download_url\": \"${DOWNLOAD_URL}\",
+              \"file_size\": \"33 MB\"
+            }" || true
