@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 import {
   checkBiometricSupport,
   authenticateWithBiometrics,
@@ -152,16 +154,37 @@ export const UnlockModal: React.FC<Props> = ({
     }
   };
 
+  const scrollViewRef = useRef<any>(null);
+  const { keyboardHeight, isKeyboardVisible, windowHeight, dismissKeyboard } = useKeyboardOffset();
+
+  const maxCardHeight = isKeyboardVisible
+    ? Math.max(300, windowHeight - keyboardHeight - 40)
+    : Math.min(650, windowHeight * 0.88);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.iconText}>🔒</Text>
-          </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View
+          style={[
+            styles.overlay,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'ios' ? keyboardHeight : Math.min(keyboardHeight, 220),
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.card, { maxHeight: maxCardHeight }]}>
+              <ScrollView
+                ref={scrollViewRef}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={styles.scrollContent}
+              >
+                <View style={styles.iconCircle}>
+                  <Text style={styles.iconText}>🔒</Text>
+                </View>
 
           <Text style={styles.title}>
             {hasPasswordSet ? '保险库已锁定' : '尚未设置主密码'}
@@ -303,8 +326,11 @@ export const UnlockModal: React.FC<Props> = ({
               </TouchableOpacity>
             </View>
           )}
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -333,6 +359,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 8,
+  },
+  scrollContent: {
+    alignItems: 'center',
+    width: '100%',
+    paddingBottom: 10,
   },
   iconCircle: {
     width: 64,

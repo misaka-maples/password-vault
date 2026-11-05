@@ -5,10 +5,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
 interface Props {
   visible: boolean;
@@ -45,66 +46,81 @@ export const ResetConfirmModal: React.FC<Props> = ({
     onClose();
   };
 
+  const { keyboardHeight, isKeyboardVisible, windowHeight, dismissKeyboard } = useKeyboardOffset();
+
+  const maxCardHeight = isKeyboardVisible
+    ? Math.max(300, windowHeight - keyboardHeight - 40)
+    : Math.min(650, windowHeight * 0.88);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.card}>
-          <View style={styles.warningIconCircle}>
-            <Text style={styles.warningIconText}>⚠️</Text>
-          </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={handleCancel}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View
+          style={[
+            styles.overlay,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'ios' ? keyboardHeight : Math.min(keyboardHeight, 220),
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.card, { maxHeight: maxCardHeight }]}>
+              <View style={styles.warningIconCircle}>
+                <Text style={styles.warningIconText}>⚠️</Text>
+              </View>
 
-          <Text style={styles.title}>高风险操作：重置密码库</Text>
+              <Text style={styles.title}>高风险操作：重置密码库</Text>
 
-          <Text style={styles.warningDesc}>
-            重置将<Text style={styles.boldRed}>彻底抹除</Text>本地当前未备份的所有密码记录与主密码，此操作<Text style={styles.boldRed}>无法撤回</Text>！
-          </Text>
-
-          <View style={styles.confirmBox}>
-            <Text style={styles.confirmTip}>
-              为防止误触或未经授权的重置，请在下方输入框中完整输入：
-            </Text>
-            <Text style={styles.keywordHighlight}>确认重置</Text>
-
-            <TextInput
-              style={[styles.input, isMatched && styles.inputMatched]}
-              placeholder="请输入“确认重置”四个字"
-              placeholderTextColor="#B0A09B"
-              value={inputText}
-              onChangeText={setInputText}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.btn, styles.cancelBtn]}
-              onPress={handleCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelBtnText}>取消放弃</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.btn,
-                styles.resetBtn,
-                !isMatched && styles.disabledBtn,
-              ]}
-              onPress={handleReset}
-              disabled={!isMatched || loading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.resetBtnText}>
-                {loading ? '正在重置...' : '确认清空重置'}
+              <Text style={styles.warningDesc}>
+                重置将<Text style={styles.boldRed}>彻底抹除</Text>本地当前未备份的所有密码记录与主密码，此操作<Text style={styles.boldRed}>无法撤回</Text>！
               </Text>
-            </TouchableOpacity>
-          </View>
+
+              <View style={styles.confirmBox}>
+                <Text style={styles.confirmTip}>
+                  为防止误触或未经授权的重置，请在下方输入框中完整输入：
+                </Text>
+                <Text style={styles.keywordHighlight}>确认重置</Text>
+
+                <TextInput
+                  style={[styles.input, isMatched && styles.inputMatched]}
+                  placeholder="请输入“确认重置”四个字"
+                  placeholderTextColor="#B0A09B"
+                  value={inputText}
+                  onChangeText={setInputText}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.cancelBtn]}
+                  onPress={handleCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>取消放弃</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.btn,
+                    styles.resetBtn,
+                    !isMatched && styles.disabledBtn,
+                  ]}
+                  onPress={handleReset}
+                  disabled={!isMatched || loading}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.resetBtnText}>
+                    {loading ? '正在重置...' : '确认清空重置'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };

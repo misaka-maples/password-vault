@@ -5,10 +5,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
 interface Props {
   visible: boolean;
@@ -55,60 +56,75 @@ export const RemovePasswordModal: React.FC<Props> = ({
     onClose();
   };
 
+  const { keyboardHeight, isKeyboardVisible, windowHeight, dismissKeyboard } = useKeyboardOffset();
+
+  const maxCardHeight = isKeyboardVisible
+    ? Math.max(300, windowHeight - keyboardHeight - 40)
+    : Math.min(650, windowHeight * 0.88);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.card}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.iconText}>🔓</Text>
-          </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={handleCancel}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View
+          style={[
+            styles.overlay,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'ios' ? keyboardHeight : Math.min(keyboardHeight, 220),
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.card, { maxHeight: maxCardHeight }]}>
+              <View style={styles.iconCircle}>
+                <Text style={styles.iconText}>🔓</Text>
+              </View>
 
-          <Text style={styles.title}>解除主密码保护</Text>
+              <Text style={styles.title}>解除主密码保护</Text>
 
-          <Text style={styles.subtitle}>
-            解除后将<Text style={styles.highlightText}>保留当前所有密码记录</Text>
-            ，切换为免密查看模式。如需操作，请输入当前主密码进行身份验证：
-          </Text>
-
-          {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
-
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="请输入当前主密码"
-              placeholderTextColor="#A79791"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              autoFocus
-            />
-          </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.btn, styles.cancelBtn]}
-              onPress={handleCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelBtnText}>取消</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.btn, styles.submitBtn, loading && styles.disabledBtn]}
-              onPress={handleConfirm}
-              disabled={loading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.submitBtnText}>
-                {loading ? '正在验证...' : '解除主密码'}
+              <Text style={styles.subtitle}>
+                解除后将<Text style={styles.highlightText}>保留当前所有密码记录</Text>
+                ，切换为免密查看模式。如需操作，请输入当前主密码进行身份验证：
               </Text>
-            </TouchableOpacity>
-          </View>
+
+              {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
+
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="请输入当前主密码"
+                  placeholderTextColor="#A79791"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  autoFocus
+                />
+              </View>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.cancelBtn]}
+                  onPress={handleCancel}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>取消</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.submitBtn, loading && styles.disabledBtn]}
+                  onPress={handleConfirm}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.submitBtnText}>
+                    {loading ? '正在验证...' : '解除主密码'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };

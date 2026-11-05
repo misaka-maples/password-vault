@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
 interface Props {
   visible: boolean;
@@ -68,94 +70,129 @@ export const MasterPasswordModal: React.FC<Props> = ({
     }
   };
 
+  const scrollViewRef = useRef<any>(null);
+  const { keyboardHeight, isKeyboardVisible, windowHeight, dismissKeyboard } = useKeyboardOffset();
+
+  const scrollToInput = (yOffset: number) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, 120);
+  };
+
+  const maxCardHeight = isKeyboardVisible
+    ? Math.max(300, windowHeight - keyboardHeight - 40)
+    : Math.min(640, windowHeight * 0.85);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.dialogCard}>
-          {/* 顶部图标与标题 */}
-          <View style={styles.iconCircle}>
-            <Text style={styles.iconText}>🔐</Text>
-          </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View
+          style={[
+            styles.overlay,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'ios' ? keyboardHeight : Math.min(keyboardHeight, 240),
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.dialogCard, { maxHeight: maxCardHeight }]}>
+              <ScrollView
+                ref={scrollViewRef}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={styles.scrollContent}
+              >
+                {/* 顶部图标与标题 */}
+                <View style={styles.iconCircle}>
+                  <Text style={styles.iconText}>🔐</Text>
+                </View>
 
-          <Text style={styles.title}>
-            {isChangeMode ? '修改保险库主密码' : '设置保险库主密码'}
-          </Text>
+                <Text style={styles.title}>
+                  {isChangeMode ? '修改保险库主密码' : '设置保险库主密码'}
+                </Text>
 
-          <Text style={styles.subtitle}>
-            {isChangeMode
-              ? '修改主密码将使用新密码对本地所有记录重新进行 AES-256 加密。'
-              : '主密码是本地 AES-256 端到端加密的唯一钥匙，不上传云端，请务必牢记！'}
-          </Text>
+                <Text style={styles.subtitle}>
+                  {isChangeMode
+                    ? '修改主密码将使用新密码对本地所有记录重新进行 AES-256 加密。'
+                    : '主密码是本地 AES-256 端到端加密的唯一钥匙，不上传云端，请务必牢记！'}
+                </Text>
 
-          {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
+                {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
 
-          {/* 原密码 (修改模式专属) */}
-          {isChangeMode && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>原主密码</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="请输入现在的旧主密码"
-                placeholderTextColor="#A99B95"
-                secureTextEntry
-                value={oldPassword}
-                onChangeText={setOldPassword}
-              />
+                {/* 原密码 (修改模式专属) */}
+                {isChangeMode && (
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>原主密码</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="请输入现在的旧主密码"
+                      placeholderTextColor="#A99B95"
+                      secureTextEntry
+                      value={oldPassword}
+                      onChangeText={setOldPassword}
+                      onFocus={() => scrollToInput(60)}
+                    />
+                  </View>
+                )}
+
+                {/* 新主密码 */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>
+                    {isChangeMode ? '新主密码' : '设置主密码 (至少6位)'}
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="请输入主密码"
+                    placeholderTextColor="#A99B95"
+                    secureTextEntry
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    onFocus={() => scrollToInput(isChangeMode ? 140 : 80)}
+                  />
+                </View>
+
+                {/* 确认新主密码 */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>确认新主密码</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="请再次输入新主密码"
+                    placeholderTextColor="#A99B95"
+                    secureTextEntry
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    onFocus={() => scrollToInput(isChangeMode ? 220 : 160)}
+                  />
+                </View>
+              </ScrollView>
+
+              {/* 操作按钮 */}
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.cancelBtn]}
+                  onPress={onClose}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>取消</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.confirmBtn, loading && styles.disabledBtn]}
+                  onPress={handleSubmit}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confirmBtnText}>
+                    {loading ? '处理中...' : isChangeMode ? '确认修改' : '确认设置'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-
-          {/* 新主密码 */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{isChangeMode ? '新主密码' : '设置主密码 (至少6位)'}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="请输入主密码"
-              placeholderTextColor="#A99B95"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
-            />
-          </View>
-
-          {/* 确认新主密码 */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>确认新主密码</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="请再次输入新主密码"
-              placeholderTextColor="#A99B95"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-          </View>
-
-          {/* 操作按钮 */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.btn, styles.cancelBtn]}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelBtnText}>取消</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.btn, styles.confirmBtn, loading && styles.disabledBtn]}
-              onPress={handleSubmit}
-              disabled={loading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.confirmBtnText}>
-                {loading ? '处理中...' : isChangeMode ? '确认修改' : '确认设置'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableWithoutFeedback>
         </View>
-      </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -184,6 +221,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 8,
+  },
+  scrollContent: {
+    alignItems: 'center',
+    width: '100%',
+    paddingBottom: 12,
   },
   iconCircle: {
     width: 60,

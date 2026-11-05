@@ -7,7 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.maple.passwordvault",
+      "buildNumber": "2",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "允许使用面容识别快速安全解锁密码保险库"
+      }
     },
     "android": {
       "versionCode": 2,

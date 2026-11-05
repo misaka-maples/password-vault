@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -67,6 +67,8 @@ export const ProfileScreen: React.FC<Props> = ({
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateRelease, setUpdateRelease] = useState<AppReleaseInfo | null>(null);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+
+  const scrollViewRef = useRef<any>(null);
 
   useEffect(() => {
     checkUser();
@@ -442,7 +444,14 @@ export const ProfileScreen: React.FC<Props> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      ref={scrollViewRef}
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={styles.headerTitle}>我的</Text>
 
       {/* 1. 安全与主密码设置中心 */}
@@ -622,6 +631,11 @@ export const ProfileScreen: React.FC<Props> = ({
               onChangeText={setAuthEmail}
               autoCapitalize="none"
               keyboardType="email-address"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 120);
+              }}
             />
 
             <TextInput
@@ -632,6 +646,11 @@ export const ProfileScreen: React.FC<Props> = ({
               onChangeText={setAuthPassword}
               secureTextEntry
               autoCapitalize="none"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 120);
+              }}
             />
 
             <TouchableOpacity

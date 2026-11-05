@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
 import { PasswordItem } from '../types';
 import { generatePassword } from '../services/crypto';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 
 interface Props {
   visible: boolean;
@@ -26,6 +27,15 @@ export const AddEditModal: React.FC<Props> = ({ visible, initialItem, onClose, o
   const [password, setPassword] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+
+  const scrollViewRef = useRef<any>(null);
+  const { keyboardHeight, isKeyboardVisible, windowHeight, dismissKeyboard } = useKeyboardOffset();
+
+  const scrollToInput = (yOffset: number) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, 120);
+  };
 
   useEffect(() => {
     if (initialItem) {
@@ -70,106 +80,130 @@ export const AddEditModal: React.FC<Props> = ({ visible, initialItem, onClose, o
     onClose();
   };
 
+  const maxCardHeight = isKeyboardVisible
+    ? Math.max(280, windowHeight - keyboardHeight - 40)
+    : Math.min(620, windowHeight * 0.85);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
-      >
-        <View style={styles.dialogCard}>
-          {/* 模态框顶部 */}
-          <View style={styles.modalHeader}>
-            <View style={styles.headerLeft}>
-              <View style={styles.headerIcon}>
-                <Text style={styles.headerIconText}>{initialItem ? '✏️' : '📝'}</Text>
-              </View>
-              <Text style={styles.headerTitle}>
-                {initialItem ? '修改密码记录' : '新增密码记录'}
-              </Text>
-            </View>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <View
+          style={[
+            styles.overlay,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'ios' ? keyboardHeight : Math.min(keyboardHeight, 260),
+              justifyContent: 'center',
+            },
+          ]}
+        >
+          <TouchableWithoutFeedback>
+            <View style={[styles.dialogCard, { maxHeight: maxCardHeight }]}>
+              {/* 模态框顶部 */}
+              <View style={styles.modalHeader}>
+                <View style={styles.headerLeft}>
+                  <View style={styles.headerIcon}>
+                    <Text style={styles.headerIconText}>{initialItem ? '✏️' : '📝'}</Text>
+                  </View>
+                  <Text style={styles.headerTitle}>
+                    {initialItem ? '修改密码记录' : '新增密码记录'}
+                  </Text>
+                </View>
 
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
-
-          <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
-            {/* 平台名称 */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>平台名称</Text>
-              <TextInput
-                style={styles.input}
-                value={title}
-                onChangeText={setTitle}
-              />
-            </View>
-
-            {/* 账号 */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>账号</Text>
-              <TextInput
-                style={styles.input}
-                value={account}
-                onChangeText={setAccount}
-                autoCapitalize="none"
-              />
-            </View>
-
-            {/* 密码 */}
-            <View style={styles.inputGroup}>
-              <View style={styles.passwordLabelRow}>
-                <Text style={styles.inputLabel}>密码</Text>
-                <TouchableOpacity
-                  style={styles.generateBtn}
-                  onPress={handleGeneratePassword}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.generateBtnText}>🎲 随机强密码</Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+                  <Text style={styles.closeBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                autoCapitalize="none"
-              />
+
+              {error ? <Text style={styles.errorText}>⚠️ {error}</Text> : null}
+
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.formScroll}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={styles.formScrollContent}
+              >
+                {/* 平台名称 */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>平台名称</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={title}
+                    onChangeText={setTitle}
+                    onFocus={() => scrollToInput(0)}
+                  />
+                </View>
+
+                {/* 账号 */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>账号</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={account}
+                    onChangeText={setAccount}
+                    autoCapitalize="none"
+                    onFocus={() => scrollToInput(65)}
+                  />
+                </View>
+
+                {/* 密码 */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.passwordLabelRow}>
+                    <Text style={styles.inputLabel}>密码</Text>
+                    <TouchableOpacity
+                      style={styles.generateBtn}
+                      onPress={handleGeneratePassword}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.generateBtnText}>🎲 随机强密码</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"
+                    onFocus={() => scrollToInput(145)}
+                  />
+                </View>
+
+                {/* 备注 */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>备注</Text>
+                  <TextInput
+                    style={[styles.input, styles.notesInput]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    numberOfLines={3}
+                    onFocus={() => scrollToInput(230)}
+                  />
+                </View>
+              </ScrollView>
+
+              {/* 底部保存与取消 */}
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.cancelBtn]}
+                  onPress={onClose}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>取消</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.saveBtn]}
+                  onPress={handleSave}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.saveBtnText}>保存记录</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            {/* 备注 */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>备注</Text>
-              <TextInput
-                style={[styles.input, styles.notesInput]}
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-          </ScrollView>
-
-          {/* 底部保存与取消 */}
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.cancelBtn]}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelBtnText}>取消</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.saveBtn]}
-              onPress={handleSave}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.saveBtnText}>保存记录</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableWithoutFeedback>
         </View>
-      </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -249,6 +283,9 @@ const styles = StyleSheet.create({
   },
   formScroll: {
     marginBottom: 14,
+  },
+  formScrollContent: {
+    paddingBottom: 20,
   },
   inputGroup: {
     marginBottom: 12,
