@@ -43,9 +43,23 @@ def patch_file(p):
                 c = c.replace(target2, repl_regex)
                 mod = True
 
-            # 2. vector.push_back(consuming:) -> vector.push_back()
-            if 'vector.push_back(consuming: propNameId)' in c:
-                c = c.replace('vector.push_back(consuming: propNameId)', 'vector.push_back(propNameId)')
+            # 2. vector.push_back move-only C++ fix via expo.addPropNameId
+            old_loop1 = """      for propertyName in propertyNames {
+        let propNameId = facebook.jsi.PropNameID.forUtf8(iRuntime, std.string(propertyName))
+        vector.push_back(consuming: propNameId)
+      }"""
+            old_loop2 = """      for propertyName in propertyNames {
+        let propNameId = facebook.jsi.PropNameID.forUtf8(iRuntime, std.string(propertyName))
+        vector.push_back(propNameId)
+      }"""
+            new_loop = """      for propertyName in propertyNames {
+        expo.addPropNameId(&vector, iRuntime, std.string(propertyName))
+      }"""
+            if old_loop1 in c:
+                c = c.replace(old_loop1, new_loop)
+                mod = True
+            elif old_loop2 in c:
+                c = c.replace(old_loop2, new_loop)
                 mod = True
 
             # 3. HostFunctionClosure instantiation
@@ -89,7 +103,6 @@ def patch_file(p):
                 if old_block in c:
                     c = c.replace(old_block, new_block)
                 else:
-                    # fallback line replacement
                     c = c.replace('return Task.immediate(name: name, priority: priority, operation: operation)', 'return Task(priority: .high, operation: operation)')
                     c = c.replace('return Task(name: name, priority: .high, operation: operation)', 'return Task(priority: .high, operation: operation)')
                 with open(p, 'w', encoding='utf-8') as fp:
@@ -114,6 +127,25 @@ inline HostFunctionClosure *createHostFunctionClosure(RetainedSwiftPointer::Cont
                     with open(p, 'w', encoding='utf-8') as fp:
                         fp.write(c)
                     print(f"Patched HostFunctionClosure.h: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
+    elif filename == 'HostObjectCallbacks.h':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            if 'addPropNameId' not in c:
+                marker = '} SWIFT_NONCOPYABLE; // class HostObjectCallbacks'
+                helper = """} SWIFT_NONCOPYABLE; // class HostObjectCallbacks
+
+inline void addPropNameId(HostObjectCallbacks::PropNameIds &vector, facebook::jsi::IRuntime &runtime, const std::string &name) {
+  vector.push_back(facebook::jsi::PropNameID::forUtf8(runtime, name));
+}"""
+                if marker in c:
+                    c = c.replace(marker, helper)
+                    with open(p, 'w', encoding='utf-8') as fp:
+                        fp.write(c)
+                    print(f"Patched HostObjectCallbacks.h: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
