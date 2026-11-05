@@ -43,11 +43,121 @@ def patch_file(p):
         try:
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
-            if '@JavaScriptActor\n    @Sendable\n    func call(' in c:
-                c = c.replace('@JavaScriptActor\n    @Sendable\n    func call(', '@JavaScriptActor\n    func call(')
+            mod = False
+
+            old1 = """    @JavaScriptActor
+    func call(_ function: borrowing JavaScriptFunction, _ runtime: JavaScriptRuntime) throws {
+      let arguments = box.value
+      try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try Self.encodeArguments(repeat each arguments, into: buffer, in: runtime)
+      }
+    }"""
+            new1 = """    let call: @JavaScriptActor @Sendable (borrowing JavaScriptFunction, JavaScriptRuntime) throws -> Void = {
+      function, runtime in
+      let arguments = box.value
+      try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try Self.encodeArguments(repeat each arguments, into: buffer, in: runtime)
+      }
+    }"""
+            if old1 in c:
+                c = c.replace(old1, new1)
+                mod = True
+
+            old3 = """    @JavaScriptActor
+    func call(_ function: borrowing JavaScriptFunction, _ runtime: JavaScriptRuntime) throws -> UncheckedSendableBox<R>
+    {
+      let arguments = box.value
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try Self.encodeArguments(repeat each arguments, into: buffer, in: runtime)
+      } withResult: { result, runtime in
+        return try R.decode(result, in: runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            new3 = """    let call: @JavaScriptActor @Sendable (borrowing JavaScriptFunction, JavaScriptRuntime) throws -> UncheckedSendableBox<R> = {
+      function, runtime in
+      let arguments = box.value
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try Self.encodeArguments(repeat each arguments, into: buffer, in: runtime)
+      } withResult: { result, runtime in
+        return try R.decode(result, in: runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            if old3 in c:
+                c = c.replace(old3, new3)
+                mod = True
+
+            old4 = """    @JavaScriptActor
+    func call(_ function: borrowing JavaScriptFunction, _ runtime: JavaScriptRuntime) throws {
+      try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacing(box.value, buffer, runtime)
+      }
+    }"""
+            new4 = """    let emplacingBox = UncheckedSendableBox(emplacing)
+    let call: @JavaScriptActor @Sendable (borrowing JavaScriptFunction, JavaScriptRuntime) throws -> Void = {
+      function, runtime in
+      try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacingBox.value(box.value, buffer, runtime)
+      }
+    }"""
+            if old4 in c:
+                c = c.replace(old4, new4)
+                mod = True
+
+            old6 = """    @JavaScriptActor
+    func call(_ function: borrowing JavaScriptFunction, _ runtime: JavaScriptRuntime) throws -> UncheckedSendableBox<R>
+    {
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacing(box.value, buffer, runtime)
+      } withResult: { result, runtime in
+        return try R.decode(result, in: runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            new6 = """    let emplacingBox = UncheckedSendableBox(emplacing)
+    let call: @JavaScriptActor @Sendable (borrowing JavaScriptFunction, JavaScriptRuntime) throws -> UncheckedSendableBox<R> = {
+      function, runtime in
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacingBox.value(box.value, buffer, runtime)
+      } withResult: { result, runtime in
+        return try R.decode(result, in: runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            if old6 in c:
+                c = c.replace(old6, new6)
+                mod = True
+
+            old7 = """    @JavaScriptActor
+    func call(_ function: borrowing JavaScriptFunction, _ runtime: JavaScriptRuntime) throws -> UncheckedSendableBox<R>
+    {
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacing(box.value, buffer, runtime)
+      } withResult: { result, runtime in
+        return try decode(result, runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            new7 = """    let emplacingBox = UncheckedSendableBox(emplacing)
+    let decodeBox = UncheckedSendableBox(decode)
+    let call: @JavaScriptActor @Sendable (borrowing JavaScriptFunction, JavaScriptRuntime) throws -> UncheckedSendableBox<R> = {
+      function, runtime in
+      let decoded = try function.call(argumentCount: argumentCount, in: runtime) { buffer, runtime in
+        try emplacingBox.value(box.value, buffer, runtime)
+      } withResult: { result, runtime in
+        return try decodeBox.value(result, runtime)
+      }
+      return UncheckedSendableBox(decoded)
+    }"""
+            if old7 in c:
+                c = c.replace(old7, new7)
+                mod = True
+
+            if mod:
                 with open(p, 'w', encoding='utf-8') as fp:
                     fp.write(c)
-                print(f"Reverted @Sendable on local func call in JavaScriptCallback.swift: {p}")
+                print(f"Patched JavaScriptCallback.swift to Sendable closures: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
