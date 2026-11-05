@@ -104,6 +104,11 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
+      - name: 🍎 选择 Xcode 16.1+
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.1'
+
       - name: 🟢 配置 Node.js 环境
         uses: actions/setup-node@v4
         with:
@@ -113,13 +118,8 @@ jobs:
       - name: 📦 安装项目依赖
         run: npm ci
 
-      - name: ⚙️ 生成 iOS 原生工程 (Expo Prebuild)
+      - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
         run: npx expo prebuild --platform ios --clean
-
-      - name: ☕ 配置 CocoaPods 依赖
-        run: |
-          cd ios
-          pod install
 
       - name: 🔨 编译 iOS 项目并生成 IPA
         run: |
@@ -136,7 +136,7 @@ jobs:
 
           # 封装为标准 iOS IPA (Payload 结构)
           mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/app.app Payload/
+          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
           zip -qr ../password-vault.ipa Payload
           cd ..
 
