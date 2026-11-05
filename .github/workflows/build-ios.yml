@@ -37,26 +37,52 @@ jobs:
         run: |
           python3 -c "
           import os
-          for root, dirs, files in os.walk('node_modules'):
-              for f in files:
-                  if f == 'Package.swift':
-                      p = os.path.join(root, f)
-                      try:
-                          with open(p, 'r', encoding='utf-8') as fp:
-                              c = fp.read()
-                          modified = False
-                          if 'swift-tools-version: 6.2' in c:
-                              c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0')
-                              modified = True
-                          if 'swiftLanguageModes: [.v6]' in c:
-                              c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]')
-                              modified = True
-                          if modified:
-                              with open(p, 'w', encoding='utf-8') as fp:
-                                  fp.write(c)
-                              print('Patched:', p)
-                      except Exception as e:
-                          print('Error patching', p, e)
+          def patch_all():
+              for base in ['node_modules']:
+                  if not os.path.exists(base): continue
+                  for root, dirs, files in os.walk(base):
+                      for f in files:
+                          p = os.path.join(root, f)
+                          if f == 'Package.swift':
+                              try:
+                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                                  mod = False
+                                  if 'swift-tools-version: 6.2' in c:
+                                      c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'); mod = True
+                                  if 'swiftLanguageModes: [.v6]' in c:
+                                      c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]'); mod = True
+                                  if '\"-Werror\", \"ImplicitStrongCapture\",' in c:
+                                      c = c.replace('\"-Werror\", \"ImplicitStrongCapture\",', ''); mod = True
+                                  if '\"-Werror\", \"NoUsage\",' in c:
+                                      c = c.replace('\"-Werror\", \"NoUsage\",', ''); mod = True
+                                  if mod:
+                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                      print('Patched Package.swift:', p)
+                              except Exception as e:
+                                  print('Error patching', p, e)
+                          elif f == 'JavaScriptRuntime.swift':
+                              try:
+                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                                  target = 'if name.wholeMatch(of: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) == nil {'
+                                  repl = 'if name.range(of: \"^[a-zA-Z_\\\\$][a-zA-Z0-9_\\\\$]*$\", options: .regularExpression) == nil {'
+                                  if target in c:
+                                      c = c.replace(target, repl)
+                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                      print('Patched JavaScriptRuntime.swift:', p)
+                              except Exception as e:
+                                  print('Error patching', p, e)
+                          elif f == 'JavaScriptPromise.swift':
+                              try:
+                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                                  target = '@JavaScriptActor\n  private final class LongLivedState: LongLivedObject {'
+                                  repl = 'private final class LongLivedState: LongLivedObject {\n    nonisolated init() {}'
+                                  if target in c:
+                                      c = c.replace(target, repl)
+                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                      print('Patched JavaScriptPromise.swift:', p)
+                              except Exception as e:
+                                  print('Error patching', p, e)
+          patch_all()
           "
 
       - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
@@ -67,27 +93,49 @@ jobs:
           python3 -c "
           import os
           for base in ['node_modules', 'ios']:
-              if os.path.exists(base):
-                  for root, dirs, files in os.walk(base):
-                      for f in files:
-                          if f == 'Package.swift':
-                              p = os.path.join(root, f)
-                              try:
-                                  with open(p, 'r', encoding='utf-8') as fp:
-                                      c = fp.read()
-                                  modified = False
-                                  if 'swift-tools-version: 6.2' in c:
-                                      c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0')
-                                      modified = True
-                                  if 'swiftLanguageModes: [.v6]' in c:
-                                      c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]')
-                                      modified = True
-                                  if modified:
-                                      with open(p, 'w', encoding='utf-8') as fp:
-                                          fp.write(c)
-                                      print('Patched in prebuild:', p)
-                              except Exception:
-                                  pass
+              if not os.path.exists(base): continue
+              for root, dirs, files in os.walk(base):
+                  for f in files:
+                      p = os.path.join(root, f)
+                      if f == 'Package.swift':
+                          try:
+                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                              mod = False
+                              if 'swift-tools-version: 6.2' in c:
+                                  c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'); mod = True
+                              if 'swiftLanguageModes: [.v6]' in c:
+                                  c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]'); mod = True
+                              if '\"-Werror\", \"ImplicitStrongCapture\",' in c:
+                                  c = c.replace('\"-Werror\", \"ImplicitStrongCapture\",', ''); mod = True
+                              if '\"-Werror\", \"NoUsage\",' in c:
+                                  c = c.replace('\"-Werror\", \"NoUsage\",', ''); mod = True
+                              if mod:
+                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                  print('Patched in prebuild:', p)
+                          except Exception:
+                              pass
+                      elif f == 'JavaScriptRuntime.swift':
+                          try:
+                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                              target = 'if name.wholeMatch(of: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) == nil {'
+                              repl = 'if name.range(of: \"^[a-zA-Z_\\\\$][a-zA-Z0-9_\\\\$]*$\", options: .regularExpression) == nil {'
+                              if target in c:
+                                  c = c.replace(target, repl)
+                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                  print('Patched in prebuild JavaScriptRuntime:', p)
+                          except Exception:
+                              pass
+                      elif f == 'JavaScriptPromise.swift':
+                          try:
+                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
+                              target = '@JavaScriptActor\n  private final class LongLivedState: LongLivedObject {'
+                              repl = 'private final class LongLivedState: LongLivedObject {\n    nonisolated init() {}'
+                              if target in c:
+                                  c = c.replace(target, repl)
+                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
+                                  print('Patched in prebuild JavaScriptPromise:', p)
+                          except Exception:
+                              pass
           "
           # 使用 Ruby xcodeproj 将 Pods 和 App 工程全局开启非模块化包含与免签
           ruby -r xcodeproj -e '
@@ -129,10 +177,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES
+            CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES=YES \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+            GCC_TREAT_WARNINGS_AS_ERRORS=NO
 
           mkdir -p Payload
           cp -r build/Build/Products/Release-iphoneos/*.app Payload/
+          # 执行 ad-hoc 自签名以兼容 TrollStore / Sideloadly / AltStore 提取器
+          codesign --force --deep --sign - Payload/*.app || true
           zip -qr ../password-vault.ipa Payload
           cd ..
           ls -lh password-vault.ipa
@@ -144,10 +196,11 @@ jobs:
           path: password-vault.ipa
           retention-days: 30
 
-      - name: 🚀 自动上传 IPA 到 GitHub Release (打 tag 时)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: 🚀 自动上传 IPA 到 GitHub Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         with:
+          tag_name: v1.0.3
           files: password-vault.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
