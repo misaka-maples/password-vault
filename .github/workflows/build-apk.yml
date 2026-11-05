@@ -46,26 +46,26 @@ jobs:
       - name: 📋 整理构建产物
         run: |
           mkdir -p build-output
-          cp android/app/build/outputs/apk/release/app-release.apk build-output/密码保险库.apk
+          cp android/app/build/outputs/apk/release/app-release.apk build-output/password-vault.apk
 
       - name: 📤 上传 APK 到 GitHub Actions 构件 (Artifacts)
         uses: actions/upload-artifact@v4
         with:
-          name: 密码保险库-apk
-          path: build-output/密码保险库.apk
+          name: password-vault-apk
+          path: build-output/password-vault.apk
           retention-days: 30
 
       - name: 🚀 自动创建 GitHub Release (打 tag 时自动发布)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: build-output/密码保险库.apk
+          files: build-output/password-vault.apk
           name: 密码保险库 ${{ github.ref_name }}
           body: |
             ## 📱 密码保险库 ${{ github.ref_name }} 发布
 
             ### 📥 下载安装
-            直接下载下方的 `密码保险库.apk` 即可在 Android 手机上安装使用。
+            直接下载下方的 `password-vault.apk` 即可在 Android 手机上安装使用。
           draft: false
           prerelease: false
         env:
@@ -75,7 +75,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          DOWNLOAD_URL="https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/密码保险库.apk"
+          DOWNLOAD_URL="https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
           echo "正在自动将版本 $VERSION 同步至 Supabase: $DOWNLOAD_URL"
           curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
             -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
@@ -88,5 +88,5 @@ jobs:
               \"title\": \"v${VERSION} 发现新版本\",
               \"release_notes\": \"1. 性能优化与修复已知问题；\n2. 支持软件内在线一键升级。\",
               \"download_url\": \"${DOWNLOAD_URL}\",
-              \"file_size\": \"33 MB\"
+              \"file_size\": \"65 MB\"
             }" || true
