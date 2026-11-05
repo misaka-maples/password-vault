@@ -1,11 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 import { APP_VERSION, APP_BUILD_NUMBER } from '../config/version';
-
-export const CUSTOM_UPDATE_URL_KEY = '@vault_custom_update_url';
 
 export interface AppReleaseInfo {
   version: string;
@@ -44,59 +41,10 @@ export function compareVersions(v1: string, v2: string): number {
 }
 
 /**
- * 读取用户配置的自定义更新源 URL
- */
-export async function getCustomUpdateUrl(): Promise<string | null> {
-  try {
-    return await AsyncStorage.getItem(CUSTOM_UPDATE_URL_KEY);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * 保存自定义更新源 URL
- */
-export async function setCustomUpdateUrl(url: string): Promise<void> {
-  const cleanUrl = url.trim();
-  if (!cleanUrl) {
-    await AsyncStorage.removeItem(CUSTOM_UPDATE_URL_KEY);
-  } else {
-    await AsyncStorage.setItem(CUSTOM_UPDATE_URL_KEY, cleanUrl);
-  }
-}
-
-/**
- * 检查应用版本更新
+ * 检查应用版本更新（直接查询 Supabase 发版表）
  */
 export async function checkForUpdates(): Promise<CheckUpdateResult> {
   try {
-    // 1. 优先检查是否有自定义更新源配置
-    const customUrl = await getCustomUpdateUrl();
-    if (customUrl) {
-      try {
-        const response = await fetch(customUrl);
-        if (response.ok) {
-          const remoteData = await response.json();
-          if (remoteData && remoteData.version) {
-            const hasNew =
-              (remoteData.versionCode && remoteData.versionCode > APP_BUILD_NUMBER) ||
-              compareVersions(remoteData.version, APP_VERSION) > 0;
-
-            return {
-              hasUpdate: hasNew,
-              release: remoteData,
-              currentVersion: APP_VERSION,
-              message: hasNew ? '发现新版本' : `当前已是最新版本 (v${APP_VERSION})`,
-            };
-          }
-        }
-      } catch (err: any) {
-        console.warn('Custom update URL fetch failed, falling back to Supabase:', err);
-      }
-    }
-
-    // 2. 检查 Supabase 数据库中的 app_releases 表
     const { data, error } = await supabase
       .from('app_releases')
       .select('*')

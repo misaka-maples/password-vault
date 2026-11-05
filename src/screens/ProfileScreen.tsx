@@ -15,7 +15,6 @@ import { getLastSyncTime } from '../services/storage';
 import { ResetConfirmModal } from '../components/ResetConfirmModal';
 import { RemovePasswordModal } from '../components/RemovePasswordModal';
 import { UpdateModal } from '../components/UpdateModal';
-import { UpdateSourceModal } from '../components/UpdateSourceModal';
 import { useThemedDialog } from '../context/ThemedDialogContext';
 import { APP_VERSION, APP_BUILD_NUMBER } from '../config/version';
 import { checkForUpdates, AppReleaseInfo } from '../services/update';
@@ -68,7 +67,6 @@ export const ProfileScreen: React.FC<Props> = ({
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateRelease, setUpdateRelease] = useState<AppReleaseInfo | null>(null);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
-  const [updateSourceModalVisible, setUpdateSourceModalVisible] = useState(false);
 
   useEffect(() => {
     checkUser();
@@ -443,11 +441,6 @@ export const ProfileScreen: React.FC<Props> = ({
     }
   };
 
-  const handleSimulateUpdate = (sampleRelease: AppReleaseInfo) => {
-    setUpdateRelease(sampleRelease);
-    setUpdateModalVisible(true);
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.headerTitle}>我的</Text>
@@ -696,18 +689,6 @@ export const ProfileScreen: React.FC<Props> = ({
             )}
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.settingItem}
-          onPress={() => setUpdateSourceModalVisible(true)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.settingItemLeft}>
-            <Text style={styles.settingItemTitle}>⚙️ 自定义更新源 / 测试安装</Text>
-            <Text style={styles.settingItemSubtitle}>支持配置远程 JSON 地址或模拟新版本下载安装</Text>
-          </View>
-          <Text style={styles.settingItemArrow}>➔</Text>
-        </TouchableOpacity>
       </View>
 
       {/* 新版本下载与安装弹窗 */}
@@ -715,14 +696,6 @@ export const ProfileScreen: React.FC<Props> = ({
         visible={updateModalVisible}
         release={updateRelease}
         onClose={() => setUpdateModalVisible(false)}
-        onShowToast={onShowToast}
-      />
-
-      {/* 更新源配置与测试弹窗 */}
-      <UpdateSourceModal
-        visible={updateSourceModalVisible}
-        onClose={() => setUpdateSourceModalVisible(false)}
-        onSimulateUpdate={handleSimulateUpdate}
         onShowToast={onShowToast}
       />
 
