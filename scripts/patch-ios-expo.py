@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import os
-import re
 
 def patch_file(p):
     filename = os.path.basename(p)
@@ -9,11 +8,12 @@ def patch_file(p):
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
             mod = False
+            # Revert any v5 back to v6 if it was changed
+            if 'swiftLanguageModes: [.v5]' in c:
+                c = c.replace('swiftLanguageModes: [.v5]', 'swiftLanguageModes: [.v6]')
+                mod = True
             if 'swift-tools-version: 6.2' in c:
                 c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0')
-                mod = True
-            if 'swiftLanguageModes: [.v6]' in c:
-                c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]')
                 mod = True
             if '"-Werror", "ImplicitStrongCapture",' in c:
                 c = c.replace('"-Werror", "ImplicitStrongCapture",', '')
@@ -28,23 +28,27 @@ def patch_file(p):
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
+    elif filename == 'JavaScriptCallback.swift':
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            target = '@JavaScriptActor\n    func call('
+            repl = '@JavaScriptActor\n    @Sendable\n    func call('
+            if target in c:
+                c = c.replace(target, repl)
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched @Sendable in JavaScriptCallback.swift: {p}")
+        except Exception as e:
+            print(f"Error patching {p}: {e}")
+
     elif filename == 'JavaScriptRuntime.swift':
         try:
             with open(p, 'r', encoding='utf-8') as fp:
                 c = fp.read()
             mod = False
-            # 1. Regex literal
-            target1 = 'if name.wholeMatch(of: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) == nil {'
-            target2 = 'if name.range(of: "^[a-zA-Z_\\$][a-zA-Z0-9_\\$]*$", options: .regularExpression) == nil {'
-            repl_regex = 'if name.range(of: "^[a-zA-Z_$][a-zA-Z0-9_$]*$", options: .regularExpression) == nil {'
-            if target1 in c:
-                c = c.replace(target1, repl_regex)
-                mod = True
-            elif target2 in c:
-                c = c.replace(target2, repl_regex)
-                mod = True
 
-            # 2. vector.push_back move-only C++ fix via expo.addPropNameId
+            # vector.push_back move-only C++ fix via expo.addPropNameId
             old_loop1 = """      for propertyName in propertyNames {
         let propNameId = facebook.jsi.PropNameID.forUtf8(iRuntime, std.string(propertyName))
         vector.push_back(consuming: propNameId)
@@ -63,63 +67,15 @@ def patch_file(p):
                 c = c.replace(old_loop2, new_loop)
                 mod = True
 
-            # 3. HostFunctionClosure instantiation
+            # HostFunctionClosure instantiation via C++ factory
             if 'return expo.HostFunctionClosure(context, call, deallocate)' in c:
                 c = c.replace('return expo.HostFunctionClosure(context, call, deallocate)', 'return expo.createHostFunctionClosure(context, call, deallocate)')
-                mod = True
-
-            # 4. Optional borrowing Setter compiler crash fix
-            old_set_guard = """        guard let set = context.set else {
-          // Unreachable in practice: when the user passed `nil` for `set`, the call site
-          // below creates the read-only `expo.HostObjectCallbacks` without a setter, and
-          // `HostObjectCallbacks::set` throws a `jsi::JSError` directly instead of
-          // calling back into Swift. Trap loudly so a future C++ refactor can't silently
-          // swallow assignments.
-          FatalError.readOnlyHostObjectSetterInvoked()
-        }"""
-            if old_set_guard in c:
-                c = c.replace(old_set_guard, "        let set = context.set")
-                mod = True
-            elif 'guard let set = context.set else {' in c:
-                c = re.sub(r'guard let set = context\.set else \{.*?FatalError\.readOnlyHostObjectSetterInvoked\(\)\s*\}', 'let set = context.set', c, flags=re.DOTALL)
                 mod = True
 
             if mod:
                 with open(p, 'w', encoding='utf-8') as fp:
                     fp.write(c)
                 print(f"Patched JavaScriptRuntime.swift: {p}")
-        except Exception as e:
-            print(f"Error patching {p}: {e}")
-
-    elif filename == 'HostObjectContext.swift':
-        try:
-            with open(p, 'r', encoding='utf-8') as fp:
-                c = fp.read()
-            mod = False
-            if '  let set: Setter?' in c:
-                c = c.replace('  let set: Setter?', '  let set: Setter')
-                mod = True
-            if '    self.set = set\n' in c:
-                c = c.replace('    self.set = set\n', '    self.set = set ?? { _, _ in FatalError.readOnlyHostObjectSetterInvoked() }\n')
-                mod = True
-            if mod:
-                with open(p, 'w', encoding='utf-8') as fp:
-                    fp.write(c)
-                print(f"Patched HostObjectContext.swift: {p}")
-        except Exception as e:
-            print(f"Error patching {p}: {e}")
-
-    elif filename == 'JavaScriptPromise.swift':
-        try:
-            with open(p, 'r', encoding='utf-8') as fp:
-                c = fp.read()
-            target = '@JavaScriptActor\n  private final class LongLivedState: LongLivedObject {'
-            repl = 'private final class LongLivedState: LongLivedObject {\n    nonisolated init() {}'
-            if target in c:
-                c = c.replace(target, repl)
-                with open(p, 'w', encoding='utf-8') as fp:
-                    fp.write(c)
-                print(f"Patched JavaScriptPromise.swift: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
 
