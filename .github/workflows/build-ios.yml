@@ -1,0 +1,82 @@
+name: Build iOS IPA (Experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-ios:
+    name: Build & Package iOS IPA
+    runs-on: macos-14
+    continue-on-error: true
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🍎 选择 Xcode 16.1+
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.1'
+
+      - name: 🟢 配置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: 📦 安装项目依赖
+        run: npm ci
+
+      - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
+        run: npx expo prebuild --platform ios --clean
+
+      - name: 🔨 编译 iOS 项目并生成 IPA
+        run: |
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace 2>/dev/null | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "未找到 xcworkspace，跳过编译"
+            exit 0
+          fi
+          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" -json | node -e "
+            const d = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+            const s = (d.workspace && d.workspace.schemes && d.workspace.schemes[0]) || '';
+            process.stdout.write(s);
+          ")
+          echo "检测到 Workspace: $WORKSPACE, Scheme: $SCHEME"
+
+          xcodebuild -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER=""
+
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -qr ../password-vault.ipa Payload
+          cd ..
+
+      - name: 📤 上传 IPA 到 GitHub Actions 构件 (Artifacts)
+        if: hashFiles('password-vault.ipa') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: password-vault-ios-ipa
+          path: password-vault.ipa
+          retention-days: 30
+
+      - name: 🚀 自动上传 IPA 到 GitHub Release (打 tag 时)
+        if: startsWith(github.ref, 'refs/tags/v') && hashFiles('password-vault.ipa') != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          files: password-vault.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,4 @@
-name: Build App (Android APK & iOS IPA)
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -65,8 +65,8 @@ jobs:
             ## 📱 密码保险库 ${{ github.ref_name }} 发布
 
             ### 📥 下载安装
-            * **Android**: 下载下方 `password-vault.apk` 直接安装。
-            * **iOS**: 下载下方 `password-vault.ipa`，可使用爱思助手/Sideloadly/AltStore/牛蛙助手进行免费自签侧载，或通过 TrollStore (巨魔商店) 免签安装。
+            * **Android 极速下载**: 下载下方 `password-vault.apk` 直接安装。
+            * 国内镜像加速直链: `https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${{ github.ref_name }}/password-vault.apk`
           draft: false
           prerelease: false
         env:
@@ -88,69 +88,9 @@ jobs:
             -d "{
               \"version\": \"${VERSION}\",
               \"version_code\": ${VERSION_CODE},
-              \"title\": \"v${VERSION} 体验优化与更新\",
-              \"release_notes\": \"1. 统一插画拟物风主题弹窗；\n2. 修复更新下载取消按钮显示；\n3. 接入高速下载节点，免翻墙直接在线升级。\",
+              \"title\": \"v${VERSION} 多账号支持与体验优化\",
+              \"release_notes\": \"1. 支持同一个条目/标签下添加多组账号与独立密码；\n2. 键盘弹出时输入框自动平滑上滑避让；\n3. 优化版本检测与国内高速在线升级通道。\",
               \"download_url\": \"${DOWNLOAD_URL}\",
               \"file_size\": \"65 MB\"
             }" || true
 
-  build-ios:
-    name: Build & Package iOS IPA
-    runs-on: macos-14
-    permissions:
-      contents: write
-
-    steps:
-      - name: 📥 检出代码
-        uses: actions/checkout@v4
-
-      - name: 🍎 选择 Xcode 16.1+
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.1'
-
-      - name: 🟢 配置 Node.js 环境
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: 📦 安装项目依赖
-        run: npm ci
-
-      - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
-        run: npx expo prebuild --platform ios --clean
-
-      - name: 🔨 编译 iOS 项目并生成 IPA
-        run: |
-          cd ios
-          xcodebuild -workspace app.xcworkspace \
-            -scheme app \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER=""
-
-          # 封装为标准 iOS IPA (Payload 结构)
-          mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
-          zip -qr ../password-vault.ipa Payload
-          cd ..
-
-      - name: 📤 上传 IPA 到 GitHub Actions 构件 (Artifacts)
-        uses: actions/upload-artifact@v4
-        with:
-          name: password-vault-ios-ipa
-          path: password-vault.ipa
-          retention-days: 30
-
-      - name: 🚀 自动上传 IPA 到 GitHub Release (打 tag 时)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: password-vault.ipa
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

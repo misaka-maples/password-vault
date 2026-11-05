@@ -110,11 +110,17 @@ export function getLocalApkUri(): string {
  */
 export function getCandidateDownloadUrls(url: string): string[] {
   const trimmed = url.trim();
-  if (trimmed.startsWith('https://github.com/')) {
+  let cleanGithubUrl = '';
+  if (trimmed.includes('github.com/')) {
+    const parts = trimmed.split('github.com/');
+    cleanGithubUrl = `https://github.com/${parts[parts.length - 1]}`;
+  }
+
+  if (cleanGithubUrl) {
     return [
-      `https://gh-proxy.com/${trimmed}`,
-      `https://ghfast.top/${trimmed}`,
-      trimmed,
+      `https://gh-proxy.com/${cleanGithubUrl}`,
+      `https://ghproxy.net/${cleanGithubUrl}`,
+      cleanGithubUrl,
     ];
   }
   return [trimmed];
