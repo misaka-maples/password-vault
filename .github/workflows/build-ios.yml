@@ -1,8 +1,10 @@
-name: Build iOS IPA (Experimental)
+name: Build iOS IPA
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -10,7 +12,6 @@ jobs:
   build-ios:
     name: Build & Package iOS IPA
     runs-on: macos-15
-    continue-on-error: true
     permissions:
       contents: write
 
@@ -34,46 +35,75 @@ jobs:
 
       - name: 🔧 修复 Expo Swift 6.2 依赖兼容性
         run: |
-          find node_modules -name "Package.swift" -exec sed -i '' 's/swift-tools-version: 6.2/swift-tools-version: 6.0/g' {} + || true
+          python3 -c "
+          import os
+          for root, dirs, files in os.walk('node_modules'):
+              for f in files:
+                  if f == 'Package.swift':
+                      p = os.path.join(root, f)
+                      try:
+                          with open(p, 'r', encoding='utf-8') as fp:
+                              c = fp.read()
+                          if 'swift-tools-version: 6.2' in c:
+                              with open(p, 'w', encoding='utf-8') as fp:
+                                  fp.write(c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'))
+                              print('Patched:', p)
+                      except Exception as e:
+                          print('Error patching', p, e)
+          "
 
       - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
         run: npx expo prebuild --platform ios --clean
 
+      - name: 🔧 扫描原生工程并确保无残留 Swift 6.2 声明
+        run: |
+          python3 -c "
+          import os
+          for base in ['node_modules', 'ios']:
+              if os.path.exists(base):
+                  for root, dirs, files in os.walk(base):
+                      for f in files:
+                          if f == 'Package.swift':
+                              p = os.path.join(root, f)
+                              try:
+                                  with open(p, 'r', encoding='utf-8') as fp:
+                                      c = fp.read()
+                                  if 'swift-tools-version: 6.2' in c:
+                                      with open(p, 'w', encoding='utf-8') as fp:
+                                          fp.write(c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'))
+                                      print('Patched:', p)
+                              except Exception:
+                                  pass
+          "
+
       - name: 🔨 编译 iOS 项目并生成 IPA
-        continue-on-error: true
         run: |
           cd ios
           WORKSPACE=$(ls -d *.xcworkspace 2>/dev/null | head -n 1)
           if [ -z "$WORKSPACE" ]; then
-            echo "未找到 xcworkspace，跳过编译"
-            exit 0
+            echo "未找到 xcworkspace，退出"
+            exit 1
           fi
-          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" -json | node -e "
-            const d = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-            const s = (d.workspace && d.workspace.schemes && d.workspace.schemes[0]) || '';
-            process.stdout.write(s);
-          ")
-          echo "检测到 Workspace: $WORKSPACE, Scheme: $SCHEME"
+          echo "检测到 Workspace: $WORKSPACE"
 
           xcodebuild -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+            -scheme app \
             -configuration Release \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             PROVISIONING_PROFILE_SPECIFIER=""
 
           mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || true
-          if [ -d "Payload" ] && [ "$(ls -A Payload)" ]; then
-            zip -qr ../password-vault.ipa Payload
-          fi
+          cp -r build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -qr ../password-vault.ipa Payload
           cd ..
+          ls -lh password-vault.ipa
 
       - name: 📤 上传 IPA 到 GitHub Actions 构件 (Artifacts)
-        if: hashFiles('password-vault.ipa') != ''
         uses: actions/upload-artifact@v4
         with:
           name: password-vault-ios-ipa
@@ -81,7 +111,7 @@ jobs:
           retention-days: 30
 
       - name: 🚀 自动上传 IPA 到 GitHub Release (打 tag 时)
-        if: startsWith(github.ref, 'refs/tags/v') && hashFiles('password-vault.ipa') != ''
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: password-vault.ipa
