@@ -37,16 +37,17 @@ jobs:
       - name: ⚙️ 生成 Android 原生工程 (Expo Prebuild)
         run: npx expo prebuild --platform android --clean
 
-      - name: 🔨 编译 Release APK
+      - name: 🔨 编译 Release APK (针对主流 64位 ARM 手机极速瘦身)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: 📋 整理构建产物
         run: |
           mkdir -p build-output
           cp android/app/build/outputs/apk/release/app-release.apk build-output/password-vault.apk
+          ls -lh build-output/password-vault.apk
 
       - name: 📤 上传 APK 到 GitHub Actions 构件 (Artifacts)
         uses: actions/upload-artifact@v4
@@ -65,7 +66,7 @@ jobs:
             ## 📱 密码保险库 ${{ github.ref_name }} 发布
 
             ### 📥 下载安装
-            * **Android 极速下载**: 下载下方 `password-vault.apk` 直接安装。
+            * **Android 极速瘦身版 (arm64-v8a)**: 下载下方 `password-vault.apk` 直接安装。
             * 国内镜像加速直链: `https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${{ github.ref_name }}/password-vault.apk`
           draft: false
           prerelease: false
@@ -77,9 +78,10 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           VERSION_CODE=$(node -p "require('./app.json').expo.android.versionCode || 1")
+          FILE_SIZE=$(ls -lh build-output/password-vault.apk | awk '{print $5}')
           # 使用国内高速加速镜像前缀，确保国内手机移动蜂窝网也能极速一键在线下载
           DOWNLOAD_URL="https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
-          echo "正在自动将版本 $VERSION (code: $VERSION_CODE) 同步至 Supabase: $DOWNLOAD_URL"
+          echo "正在自动将版本 $VERSION (code: $VERSION_CODE, size: $FILE_SIZE) 同步至 Supabase: $DOWNLOAD_URL"
           curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
             -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
             -H "Authorization: Bearer sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
@@ -88,9 +90,9 @@ jobs:
             -d "{
               \"version\": \"${VERSION}\",
               \"version_code\": ${VERSION_CODE},
-              \"title\": \"v${VERSION} 多账号支持与体验优化\",
-              \"release_notes\": \"1. 支持同一个条目/标签下添加多组账号与独立密码；\n2. 键盘弹出时输入框自动平滑上滑避让；\n3. 优化版本检测与国内高速在线升级通道。\",
+              \"title\": \"v${VERSION} 多账号支持与极速瘦身版\",
+              \"release_notes\": \"1. 安装包大幅瘦身至 ~21MB（移除冗余模拟器架构）；\n2. 同一标签类支持添加多组账号与独立密码；\n3. 输入法软键盘自适应上滑防遮挡；\n4. 国内多节点高速下载加速。\",
               \"download_url\": \"${DOWNLOAD_URL}\",
-              \"file_size\": \"65 MB\"
+              \"file_size\": \"${FILE_SIZE}\"
             }" || true
 

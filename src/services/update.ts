@@ -119,6 +119,7 @@ export function getCandidateDownloadUrls(url: string): string[] {
 
   if (cleanGithubUrl) {
     return [
+      `https://gh.con.sh/${cleanGithubUrl}`,
       `https://gh-proxy.com/${cleanGithubUrl}`,
       `https://ghproxy.net/${cleanGithubUrl}`,
       cleanGithubUrl,
