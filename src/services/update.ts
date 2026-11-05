@@ -103,6 +103,21 @@ export function getLocalApkUri(): string {
 }
 
 /**
+ * 获取可用的下载候选地址列表（自动为 GitHub 直链添加国内高速镜像兜底）
+ */
+export function getCandidateDownloadUrls(url: string): string[] {
+  const trimmed = url.trim();
+  if (trimmed.startsWith('https://github.com/')) {
+    return [
+      `https://ghfast.top/${trimmed}`,
+      `https://gh-proxy.com/${trimmed}`,
+      trimmed,
+    ];
+  }
+  return [trimmed];
+}
+
+/**
  * 下载并安装 APK
  */
 export async function downloadAndInstallApk(
@@ -135,27 +150,39 @@ export async function downloadAndInstallApk(
     }
   };
 
-  activeDownloadResumable = FileSystem.createDownloadResumable(
-    downloadUrl,
-    targetFileUri,
-    {},
-    callback
-  );
+  const candidates = getCandidateDownloadUrls(downloadUrl);
+  let lastError = '下载失败';
 
-  try {
-    const result = await activeDownloadResumable.downloadAsync();
-    if (!result?.uri) {
-      return { success: false, error: '安装包下载失败，未取得文件' };
+  for (const url of candidates) {
+    try {
+      // 重新清理目标文件
+      try {
+        await FileSystem.deleteAsync(targetFileUri, { idempotent: true });
+      } catch {}
+
+      activeDownloadResumable = FileSystem.createDownloadResumable(
+        url,
+        targetFileUri,
+        {},
+        callback
+      );
+
+      const result = await activeDownloadResumable.downloadAsync();
+      if (result?.uri) {
+        // 调用系统包安装器
+        const installOk = await launchPackageInstaller(result.uri);
+        return { success: installOk.success, uri: result.uri, error: installOk.error };
+      }
+    } catch (err: any) {
+      lastError = err.message || '网络连接异常';
+      // 尝试下一个镜像源
+      continue;
+    } finally {
+      activeDownloadResumable = null;
     }
-
-    // 调用系统包安装器
-    const installOk = await launchPackageInstaller(result.uri);
-    return { success: installOk.success, uri: result.uri, error: installOk.error };
-  } catch (err: any) {
-    return { success: false, error: err.message || '下载或安装异常' };
-  } finally {
-    activeDownloadResumable = null;
   }
+
+  return { success: false, error: lastError };
 }
 
 /**
