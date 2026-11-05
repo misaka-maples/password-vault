@@ -34,109 +34,14 @@ jobs:
         run: npm ci
 
       - name: 🔧 修复 Expo Swift 兼容性与并发模式
-        run: |
-          python3 -c "
-          import os
-          def patch_all():
-              for base in ['node_modules']:
-                  if not os.path.exists(base): continue
-                  for root, dirs, files in os.walk(base):
-                      for f in files:
-                          p = os.path.join(root, f)
-                          if f == 'Package.swift':
-                              try:
-                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                                  mod = False
-                                  if 'swift-tools-version: 6.2' in c:
-                                      c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'); mod = True
-                                  if 'swiftLanguageModes: [.v6]' in c:
-                                      c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]'); mod = True
-                                  if '\"-Werror\", \"ImplicitStrongCapture\",' in c:
-                                      c = c.replace('\"-Werror\", \"ImplicitStrongCapture\",', ''); mod = True
-                                  if '\"-Werror\", \"NoUsage\",' in c:
-                                      c = c.replace('\"-Werror\", \"NoUsage\",', ''); mod = True
-                                  if mod:
-                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                      print('Patched Package.swift:', p)
-                              except Exception as e:
-                                  print('Error patching', p, e)
-                          elif f == 'JavaScriptRuntime.swift':
-                              try:
-                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                                  target = 'if name.wholeMatch(of: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) == nil {'
-                                  repl = 'if name.range(of: \"^[a-zA-Z_\\\\$][a-zA-Z0-9_\\\\$]*$\", options: .regularExpression) == nil {'
-                                  if target in c:
-                                      c = c.replace(target, repl)
-                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                      print('Patched JavaScriptRuntime.swift:', p)
-                              except Exception as e:
-                                  print('Error patching', p, e)
-                          elif f == 'JavaScriptPromise.swift':
-                              try:
-                                  with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                                  target = '@JavaScriptActor\n  private final class LongLivedState: LongLivedObject {'
-                                  repl = 'private final class LongLivedState: LongLivedObject {\n    nonisolated init() {}'
-                                  if target in c:
-                                      c = c.replace(target, repl)
-                                      with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                      print('Patched JavaScriptPromise.swift:', p)
-                              except Exception as e:
-                                  print('Error patching', p, e)
-          patch_all()
-          "
+        run: python3 scripts/patch-ios-expo.py
 
       - name: ⚙️ 生成 iOS 原生工程与 CocoaPods 依赖
         run: npx expo prebuild --platform ios --clean
 
       - name: 🔧 配置 Xcode 与 Pods 允许非模块化头文件与免签
         run: |
-          python3 -c "
-          import os
-          for base in ['node_modules', 'ios']:
-              if not os.path.exists(base): continue
-              for root, dirs, files in os.walk(base):
-                  for f in files:
-                      p = os.path.join(root, f)
-                      if f == 'Package.swift':
-                          try:
-                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                              mod = False
-                              if 'swift-tools-version: 6.2' in c:
-                                  c = c.replace('swift-tools-version: 6.2', 'swift-tools-version: 6.0'); mod = True
-                              if 'swiftLanguageModes: [.v6]' in c:
-                                  c = c.replace('swiftLanguageModes: [.v6]', 'swiftLanguageModes: [.v5]'); mod = True
-                              if '\"-Werror\", \"ImplicitStrongCapture\",' in c:
-                                  c = c.replace('\"-Werror\", \"ImplicitStrongCapture\",', ''); mod = True
-                              if '\"-Werror\", \"NoUsage\",' in c:
-                                  c = c.replace('\"-Werror\", \"NoUsage\",', ''); mod = True
-                              if mod:
-                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                  print('Patched in prebuild:', p)
-                          except Exception:
-                              pass
-                      elif f == 'JavaScriptRuntime.swift':
-                          try:
-                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                              target = 'if name.wholeMatch(of: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/) == nil {'
-                              repl = 'if name.range(of: \"^[a-zA-Z_\\\\$][a-zA-Z0-9_\\\\$]*$\", options: .regularExpression) == nil {'
-                              if target in c:
-                                  c = c.replace(target, repl)
-                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                  print('Patched in prebuild JavaScriptRuntime:', p)
-                          except Exception:
-                              pass
-                      elif f == 'JavaScriptPromise.swift':
-                          try:
-                              with open(p, 'r', encoding='utf-8') as fp: c = fp.read()
-                              target = '@JavaScriptActor\n  private final class LongLivedState: LongLivedObject {'
-                              repl = 'private final class LongLivedState: LongLivedObject {\n    nonisolated init() {}'
-                              if target in c:
-                                  c = c.replace(target, repl)
-                                  with open(p, 'w', encoding='utf-8') as fp: fp.write(c)
-                                  print('Patched in prebuild JavaScriptPromise:', p)
-                          except Exception:
-                              pass
-          "
+          python3 scripts/patch-ios-expo.py
           # 使用 Ruby xcodeproj 将 Pods 和 App 工程全局开启非模块化包含与免签
           ruby -r xcodeproj -e '
             ["ios/Pods/Pods.xcodeproj", "ios/app.xcodeproj"].each do |proj_path|
