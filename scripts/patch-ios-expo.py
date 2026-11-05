@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import shutil
+import tarfile
 
 def patch_file(p):
     filename = os.path.basename(p)
@@ -340,6 +342,47 @@ inline void addPropNameId(HostObjectCallbacks::PropNameIds &vector, facebook::js
                     print(f"Patched HostObjectCallbacks.h: {p}")
         except Exception as e:
             print(f"Error patching {p}: {e}")
+
+    elif filename.endswith('.swiftinterface'):
+        try:
+            with open(p, 'r', encoding='utf-8') as fp:
+                c = fp.read()
+            if ': @_Concurrency.MainActor ExpoModulesCore.AnyArgument' in c:
+                c = c.replace(': @_Concurrency.MainActor ExpoModulesCore.AnyArgument', ': ExpoModulesCore.AnyArgument')
+                with open(p, 'w', encoding='utf-8') as fp:
+                    fp.write(c)
+                print(f"Patched swiftinterface: {p}")
+        except Exception as e:
+            print(f"Error patching swiftinterface {p}: {e}")
+
+    elif filename.endswith('.tar.gz') and 'ExpoModules' in filename:
+        try:
+            extract_dir = p + '.tmp_extracted'
+            if os.path.exists(extract_dir):
+                shutil.rmtree(extract_dir)
+            os.makedirs(extract_dir, exist_ok=True)
+            with tarfile.open(p, 'r:gz') as tar:
+                tar.extractall(extract_dir)
+            modified = False
+            for root, dirs, files in os.walk(extract_dir):
+                for f in files:
+                    if f.endswith('.swiftinterface'):
+                        sp = os.path.join(root, f)
+                        with open(sp, 'r', encoding='utf-8') as sfp:
+                            sc = sfp.read()
+                        if ': @_Concurrency.MainActor ExpoModulesCore.AnyArgument' in sc:
+                            sc = sc.replace(': @_Concurrency.MainActor ExpoModulesCore.AnyArgument', ': ExpoModulesCore.AnyArgument')
+                            with open(sp, 'w', encoding='utf-8') as sfp:
+                                sfp.write(sc)
+                            modified = True
+            if modified:
+                with tarfile.open(p, 'w:gz') as tar:
+                    for item in os.listdir(extract_dir):
+                        tar.add(os.path.join(extract_dir, item), arcname=item)
+                print(f"Patched and repacked archive: {p}")
+            shutil.rmtree(extract_dir)
+        except Exception as e:
+            print(f"Error patching archive {p}: {e}")
 
 def main():
     for base in ['node_modules', 'ios']:
