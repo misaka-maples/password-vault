@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { Platform } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { Platform, Linking } from 'react-native';
 import { supabase } from '../config/supabase';
 import { APP_VERSION, APP_BUILD_NUMBER } from '../config/version';
 
@@ -129,7 +130,23 @@ export function getCandidateDownloadUrls(url: string): string[] {
 }
 
 /**
- * 下载并安装 APK
+ * 通过系统默认浏览器打开下载链接（支持后台、锁屏下载与系统通知栏进度显示）
+ */
+export async function openDownloadInBrowser(downloadUrl: string): Promise<boolean> {
+  const candidates = getCandidateDownloadUrls(downloadUrl);
+  const targetUrl = candidates[0] || downloadUrl;
+  try {
+    const supported = await Linking.canOpenURL(targetUrl);
+    if (supported) {
+      await Linking.openURL(targetUrl);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * 下载并安装 APK（支持屏幕常亮、断点续传与网络中断自动重试）
  */
 export async function downloadAndInstallApk(
   downloadUrl: string,
@@ -138,6 +155,11 @@ export async function downloadAndInstallApk(
   if (Platform.OS !== 'android') {
     return { success: false, error: '仅支持在 Android 设备上进行软件内安装更新' };
   }
+
+  // 保持屏幕常亮，防止手机锁屏导致系统强制断开网络 Socket
+  try {
+    await activateKeepAwakeAsync('apk_download_tag');
+  } catch {}
 
   const targetFileUri = getLocalApkUri();
 
@@ -164,36 +186,59 @@ export async function downloadAndInstallApk(
   const candidates = getCandidateDownloadUrls(downloadUrl);
   let lastError = '下载失败';
 
-  for (const url of candidates) {
-    try {
-      // 重新清理目标文件
+  try {
+    for (const url of candidates) {
       try {
-        await FileSystem.deleteAsync(targetFileUri, { idempotent: true });
-      } catch {}
+        activeDownloadResumable = FileSystem.createDownloadResumable(
+          url,
+          targetFileUri,
+          {},
+          callback
+        );
 
-      activeDownloadResumable = FileSystem.createDownloadResumable(
-        url,
-        targetFileUri,
-        {},
-        callback
-      );
+        let result = null;
+        let retries = 0;
+        // 支持断点续传重试（若遭遇网络暂时中断或短暂切屏，不从头开始重新下载）
+        while (retries < 3) {
+          try {
+            if (retries === 0) {
+              result = await activeDownloadResumable.downloadAsync();
+            } else {
+              result = await activeDownloadResumable.resumeAsync();
+            }
+            if (result?.uri) break;
+          } catch (innerErr: any) {
+            retries++;
+            if (retries >= 3) {
+              throw innerErr;
+            }
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
 
-      const result = await activeDownloadResumable.downloadAsync();
-      if (result?.uri) {
-        // 调用系统包安装器
-        const installOk = await launchPackageInstaller(result.uri);
-        return { success: installOk.success, uri: result.uri, error: installOk.error };
+        if (result?.uri) {
+          // 调用系统包安装器
+          const installOk = await launchPackageInstaller(result.uri);
+          return { success: installOk.success, uri: result.uri, error: installOk.error };
+        }
+      } catch (err: any) {
+        lastError = err.message || '网络连接异常';
+        // 尝试下一个镜像源前清理
+        try {
+          await FileSystem.deleteAsync(targetFileUri, { idempotent: true });
+        } catch {}
+        continue;
+      } finally {
+        activeDownloadResumable = null;
       }
-    } catch (err: any) {
-      lastError = err.message || '网络连接异常';
-      // 尝试下一个镜像源
-      continue;
-    } finally {
-      activeDownloadResumable = null;
     }
-  }
 
-  return { success: false, error: lastError };
+    return { success: false, error: lastError };
+  } finally {
+    try {
+      await deactivateKeepAwake('apk_download_tag');
+    } catch {}
+  }
 }
 
 /**

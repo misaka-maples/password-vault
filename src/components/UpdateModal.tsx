@@ -14,6 +14,7 @@ import {
   cancelDownload,
   launchPackageInstaller,
   getLocalApkUri,
+  openDownloadInBrowser,
 } from '../services/update';
 
 interface Props {
@@ -77,6 +78,17 @@ export const UpdateModal: React.FC<Props> = ({
     } else {
       setStatus('error');
       setErrorMessage(res.error || '下载或拉起安装失败');
+    }
+  };
+
+  const handleOpenBrowser = async () => {
+    if (!release) return;
+    const ok = await openDownloadInBrowser(release.downloadUrl);
+    if (ok) {
+      onShowToast('已调起浏览器下载，支持锁屏与切后台');
+      onClose();
+    } else {
+      onShowToast('未能拉起浏览器，请重试');
     }
   };
 
@@ -145,6 +157,14 @@ export const UpdateModal: React.FC<Props> = ({
                   <Text style={styles.primaryBtnText}>立即下载更新</Text>
                 </TouchableOpacity>
               </View>
+
+              <TouchableOpacity
+                style={styles.browserLinkBtn}
+                onPress={handleOpenBrowser}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.browserLinkText}>🌐 改用系统浏览器下载 (支持锁屏与后台下载)</Text>
+              </TouchableOpacity>
             </>
           )}
 
@@ -156,7 +176,7 @@ export const UpdateModal: React.FC<Props> = ({
               </View>
 
               <Text style={styles.title}>正在下载新版本...</Text>
-              <Text style={styles.subtitle}>下载完成后将自动拉起 Android 系统安装器</Text>
+              <Text style={styles.subtitle}>下载完成后将自动拉起系统安装器</Text>
 
               {/* 卡通拟物进度条 */}
               <View style={styles.progressContainer}>
@@ -171,10 +191,14 @@ export const UpdateModal: React.FC<Props> = ({
                 <View style={styles.progressTextRow}>
                   <Text style={styles.progressPercent}>{Math.round(progress * 100)}%</Text>
                   <Text style={styles.progressBytes}>
-                    {formatSize(writtenBytes)} / {totalBytes > 0 ? formatSize(totalBytes) : release.fileSize || '33 MB'}
+                    {formatSize(writtenBytes)} / {totalBytes > 0 ? formatSize(totalBytes) : release.fileSize || '21 MB'}
                   </Text>
                 </View>
               </View>
+
+              <Text style={styles.keepAwakeHint}>
+                💡 应用内下载已开启常亮与断点续传；如需锁屏离开，建议点击下方改用浏览器下载。
+              </Text>
 
               <View style={styles.buttonRow}>
                 <TouchableOpacity
@@ -183,6 +207,14 @@ export const UpdateModal: React.FC<Props> = ({
                   activeOpacity={0.7}
                 >
                   <Text style={styles.cancelBtnText}>取消下载</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.browserBtn]}
+                  onPress={handleOpenBrowser}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.browserBtnText}>切到浏览器下载</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -247,6 +279,14 @@ export const UpdateModal: React.FC<Props> = ({
                   <Text style={styles.primaryBtnText}>重试下载</Text>
                 </TouchableOpacity>
               </View>
+
+              <TouchableOpacity
+                style={styles.browserLinkBtn}
+                onPress={handleOpenBrowser}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.browserLinkText}>🌐 改用浏览器下载 (更稳定/支持锁屏后台)</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -441,5 +481,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     color: '#FFFFFF',
+  },
+  browserBtn: {
+    backgroundColor: '#FFEFEA',
+  },
+  browserBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D45A39',
+  },
+  browserLinkBtn: {
+    marginTop: 14,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  browserLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3B82F6',
+    textDecorationLine: 'underline',
+  },
+  keepAwakeHint: {
+    fontSize: 12,
+    color: '#8A7A74',
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 16,
+    backgroundColor: '#FAF4EF',
+    padding: 8,
+    borderRadius: 10,
   },
 });
