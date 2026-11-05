@@ -39,7 +39,7 @@ export const VaultScreen: React.FC<Props> = ({
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<PasswordItem | null>(null);
 
-  // 搜索过滤
+  // 搜索过滤：支持匹配平台名称、分类标签、所有子账号或账号标签、备注
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase().trim();
@@ -47,7 +47,14 @@ export const VaultScreen: React.FC<Props> = ({
       (it) =>
         it.title.toLowerCase().includes(q) ||
         it.account.toLowerCase().includes(q) ||
-        (it.notes && it.notes.toLowerCase().includes(q))
+        (it.notes && it.notes.toLowerCase().includes(q)) ||
+        (it.category && it.category.toLowerCase().includes(q)) ||
+        (it.accounts &&
+          it.accounts.some(
+            (sub) =>
+              sub.account.toLowerCase().includes(q) ||
+              (sub.label && sub.label.toLowerCase().includes(q))
+          ))
     );
   }, [items, searchQuery]);
 
