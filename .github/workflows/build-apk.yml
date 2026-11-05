@@ -76,7 +76,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           # 使用国内高速加速镜像前缀，确保国内手机移动蜂窝网也能极速一键在线下载
-          DOWNLOAD_URL="https://ghfast.top/https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
+          DOWNLOAD_URL="https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
           echo "正在自动将版本 $VERSION 同步至 Supabase: $DOWNLOAD_URL"
           curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
             -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \

@@ -109,8 +109,8 @@ export function getCandidateDownloadUrls(url: string): string[] {
   const trimmed = url.trim();
   if (trimmed.startsWith('https://github.com/')) {
     return [
-      `https://ghfast.top/${trimmed}`,
       `https://gh-proxy.com/${trimmed}`,
+      `https://ghfast.top/${trimmed}`,
       trimmed,
     ];
   }
