@@ -176,13 +176,15 @@ export const UpdateModal: React.FC<Props> = ({
                 </View>
               </View>
 
-              <TouchableOpacity
-                style={[styles.btn, styles.cancelBtn, styles.fullBtn]}
-                onPress={handleCancelDownload}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelBtnText}>取消下载</Text>
-              </TouchableOpacity>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.cancelBtn]}
+                  onPress={handleCancelDownload}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>取消下载</Text>
+                </TouchableOpacity>
+              </View>
             </>
           )}
 
@@ -412,6 +414,7 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
+    minHeight: 48,
     paddingVertical: 13,
     borderRadius: 16,
     borderWidth: 2.2,
@@ -420,7 +423,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fullBtn: {
-    flex: 1,
+    width: '100%',
   },
   cancelBtn: {
     backgroundColor: '#F5ECE7',
@@ -429,6 +432,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#6F5E59',
+    textAlign: 'center',
   },
   primaryBtn: {
     backgroundColor: '#FF7A59',
