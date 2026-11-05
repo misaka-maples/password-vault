@@ -19,10 +19,17 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 🍎 选择 Xcode 16.4+
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.4'
+      - name: 🍎 选择 Xcode 26.3 (Swift 6.3)
+        run: |
+          for xcode in /Applications/Xcode_26.3.app /Applications/Xcode_26.2.app /Applications/Xcode_26.1.1.app /Applications/Xcode_26.0.1.app /Applications/Xcode_26.app; do
+            if [ -d "$xcode" ]; then
+              echo "切换到: $xcode"
+              sudo xcode-select -switch "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
 
       - name: 🟢 配置 Node.js 环境
         uses: actions/setup-node@v4
