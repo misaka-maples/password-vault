@@ -49,6 +49,7 @@ export async function checkForUpdates(): Promise<CheckUpdateResult> {
       .from('app_releases')
       .select('*')
       .order('version_code', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle();
 
