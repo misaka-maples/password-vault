@@ -110,9 +110,8 @@ jobs:
 
       - name: 🚀 自动上传 IPA 到 GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
-          tag_name: v1.0.3
           files: password-vault.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
