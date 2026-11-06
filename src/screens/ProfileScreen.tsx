@@ -27,6 +27,30 @@ import {
 
 const CACHED_USER_EMAIL_KEY = '@vault_cached_user_email';
 
+function formatFriendlyError(err: any, defaultMsg = '操作失败，请重试'): string {
+  if (!err) return defaultMsg;
+  const raw = (err.message || (typeof err === 'string' ? err : '')).toString();
+  if (
+    raw.includes('SocketException') ||
+    raw.includes('Connection reset') ||
+    raw.includes('ECONNRESET') ||
+    raw.includes('Network request failed') ||
+    raw.includes('Failed to fetch')
+  ) {
+    return '网络连接异常或被重置，请检查手机网络连接后重试。';
+  }
+  if (raw.includes('Invalid login credentials')) {
+    return '邮箱或登录密码不正确，请重新核对。';
+  }
+  if (raw.includes('User already registered')) {
+    return '该邮箱已被注册，请直接切换为登录模式。';
+  }
+  if (raw.includes('timeout') || raw.includes('SocketTimeoutException')) {
+    return '连接云端超时，请检查网络或切换网络后重试。';
+  }
+  return raw || defaultMsg;
+}
+
 interface Props {
   hasMasterPassword: boolean;
   masterKey: string | null;
@@ -280,7 +304,7 @@ export const ProfileScreen: React.FC<Props> = ({
     } catch (err: any) {
       showDialog({
         title: '操作失败',
-        message: err.message || '网络连接异常',
+        message: formatFriendlyError(err, '网络连接异常'),
         icon: '⚠️',
         iconBg: '#FFEBEA',
         confirmType: 'danger',
@@ -352,7 +376,7 @@ export const ProfileScreen: React.FC<Props> = ({
     } catch (err: any) {
       showDialog({
         title: '备份错误',
-        message: err.message || '备份失败',
+        message: formatFriendlyError(err, '备份失败'),
         icon: '⚠️',
         confirmType: 'danger',
         confirmText: '我知道了',
@@ -401,7 +425,7 @@ export const ProfileScreen: React.FC<Props> = ({
         } catch (err: any) {
           showDialog({
             title: '同步错误',
-            message: err.message || '网络连接异常',
+            message: formatFriendlyError(err, '网络连接异常'),
             icon: '⚠️',
             confirmType: 'danger',
             confirmText: '我知道了',
@@ -432,7 +456,7 @@ export const ProfileScreen: React.FC<Props> = ({
     } catch (err: any) {
       showDialog({
         title: '检查更新失败',
-        message: err.message || '网络连接异常，请稍后重试',
+        message: formatFriendlyError(err, '网络连接异常，请稍后重试'),
         icon: '⚠️',
         iconBg: '#FFEBEA',
         confirmType: 'danger',
