@@ -81,6 +81,15 @@ export async function checkForUpdates(): Promise<CheckUpdateResult> {
       };
     }
 
+    if (error) {
+      return {
+        hasUpdate: false,
+        currentVersion: APP_VERSION,
+        message: `检查更新失败: ${error.message || '网络连接异常'}`,
+        error: error.message,
+      };
+    }
+
     // 默认已是最新版本
     return {
       hasUpdate: false,

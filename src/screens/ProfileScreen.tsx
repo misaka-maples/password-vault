@@ -45,8 +45,8 @@ function formatFriendlyError(err: any, defaultMsg = '操作失败，请重试'):
   if (raw.includes('User already registered')) {
     return '该邮箱已被注册，请直接切换为登录模式。';
   }
-  if (raw.includes('timeout') || raw.includes('SocketTimeoutException')) {
-    return '连接云端超时，请检查网络或切换网络后重试。';
+  if (raw.includes('timeout') || raw.includes('SocketTimeoutException') || raw.includes('超时')) {
+    return '连接云端超时（超过 8 秒未响应），请检查网络环境或开启加速工具。';
   }
   return raw || defaultMsg;
 }
@@ -441,6 +441,17 @@ export const ProfileScreen: React.FC<Props> = ({
     setIsCheckingUpdate(true);
     try {
       const res = await checkForUpdates();
+      if (res.error) {
+        showDialog({
+          title: '检查更新失败',
+          message: formatFriendlyError({ message: res.error }, '网络连接异常，请稍后重试'),
+          icon: '⚠️',
+          iconBg: '#FFEBEA',
+          confirmType: 'danger',
+          confirmText: '我知道了',
+        });
+        return;
+      }
       if (res.hasUpdate && res.release) {
         setUpdateRelease(res.release);
         setUpdateModalVisible(true);
