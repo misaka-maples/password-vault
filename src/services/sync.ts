@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { cloudbaseAuth, cloudbaseDb } from '../config/cloudbase';
 import { getLocalEncryptedBlob, setLocalEncryptedBlob, setLastSyncTime } from './storage';
 
 export interface SyncResult {
@@ -8,10 +8,10 @@ export interface SyncResult {
 }
 
 /**
- * 备份本地已加密密文到 Supabase 云端
+ * 备份本地已加密密文到 CloudBase PostgreSQL
  */
-export async function backupToSupabase(masterKey: string | null): Promise<SyncResult> {
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+export async function backupToCloudBase(masterKey: string | null): Promise<SyncResult> {
+  const { data: { user }, error: authErr } = await cloudbaseAuth.getUser();
   if (authErr || !user) {
     return { success: false, message: '请先在“我的”页面登录云端账号' };
   }
@@ -28,7 +28,7 @@ export async function backupToSupabase(masterKey: string | null): Promise<SyncRe
   }
 
   const now = new Date().toISOString();
-  const { error } = await supabase
+  const { error } = await cloudbaseDb
     .from('vaults')
     .upsert({
       user_id: user.id,
@@ -54,35 +54,34 @@ export async function backupToSupabase(masterKey: string | null): Promise<SyncRe
 }
 
 /**
- * 从 Supabase 云端拉取最新加密密文
+ * 从 CloudBase PostgreSQL 拉取最新加密密文
  */
-export async function pullFromSupabase(): Promise<SyncResult> {
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+export async function pullFromCloudBase(): Promise<SyncResult> {
+  const { data: { user }, error: authErr } = await cloudbaseAuth.getUser();
   if (authErr || !user) {
     return { success: false, message: '请先在“我的”页面登录云端账号' };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await cloudbaseDb
     .from('vaults')
     .select('encrypted_data, updated_at')
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      return { success: false, message: '云端暂无备份数据' };
-    }
     return { success: false, message: `拉取失败: ${error.message}` };
   }
 
-  if (!data?.encrypted_data) {
+  const vault = data as { encrypted_data?: string; updated_at?: string } | null;
+
+  if (!vault?.encrypted_data) {
     return { success: false, message: '云端备份数据为空' };
   }
 
   // 写入本地加密存储
-  await setLocalEncryptedBlob(data.encrypted_data);
+  await setLocalEncryptedBlob(vault.encrypted_data);
 
-  const formattedTime = new Date(data.updated_at || Date.now()).toLocaleTimeString('zh-CN', {
+  const formattedTime = new Date(vault.updated_at || Date.now()).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   });

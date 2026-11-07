@@ -56,43 +56,49 @@ jobs:
           path: build-output/password-vault.apk
           retention-days: 30
 
-      - name: 🚀 自动创建或补充 GitHub Release (打 tag 时自动发布)
+      - name: ☁️ 上传 APK 和 latest.json 到腾讯 COS
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build-output/password-vault.apk
-          name: 密码保险库 ${{ github.ref_name }}
-          body: |
-            ## 📱 密码保险库 ${{ github.ref_name }} 发布
-
-            ### 📥 下载安装
-            * **Android 极速瘦身版 (arm64-v8a)**: 下载下方 `password-vault.apk` 直接安装。
-            * 国内镜像加速直链: `https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${{ github.ref_name }}/password-vault.apk`
-          draft: false
-          prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: ☁️ 自动同步新版本至 Supabase 发版表
-        if: startsWith(github.ref, 'refs/tags/v')
+          COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
+          COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
+          COS_BUCKET: ${{ secrets.COS_BUCKET }}
+          COS_REGION: ${{ secrets.COS_REGION }}
+          COS_PUBLIC_BASE_URL: ${{ secrets.COS_PUBLIC_BASE_URL }}
         run: |
+          set -euo pipefail
+
+          COSCLI_VERSION="1.0.9"
+          curl -fsSL \
+            "https://github.com/tencentyun/coscli/releases/download/v${COSCLI_VERSION}/coscli-linux-amd64" \
+            -o /tmp/coscli
+          chmod +x /tmp/coscli
+
           VERSION="${GITHUB_REF_NAME#v}"
           VERSION_CODE=$(node -p "require('./app.json').expo.android.versionCode || 1")
           FILE_SIZE=$(ls -lh build-output/password-vault.apk | awk '{print $5}')
-          # 使用国内高速加速镜像前缀，确保国内手机移动蜂窝网也能极速一键在线下载
-          DOWNLOAD_URL="https://gh-proxy.com/https://github.com/misaka-maples/password-vault/releases/download/${GITHUB_REF_NAME}/password-vault.apk"
-          echo "正在自动将版本 $VERSION (code: $VERSION_CODE, size: $FILE_SIZE) 同步至 Supabase: $DOWNLOAD_URL"
-          curl -s -X POST "https://xgalwvshlamuihtxjsfd.supabase.co/rest/v1/app_releases" \
-            -H "apikey: sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
-            -H "Authorization: Bearer sb_publishable_oNqwiQN2TADE4RCLTtEcyw_cGGLHzF5" \
-            -H "Content-Type: application/json" \
-            -H "Prefer: return=minimal" \
-            -d "{
-              \"version\": \"${VERSION}\",
-              \"version_code\": ${VERSION_CODE},
-              \"title\": \"v${VERSION} 多账号支持与极速瘦身版\",
-              \"release_notes\": \"1. 安装包大幅瘦身至 ~21MB（移除冗余模拟器架构）；\n2. 同一标签类支持添加多组账号与独立密码；\n3. 输入法软键盘自适应上滑防遮挡；\n4. 国内多节点高速下载加速。\",
-              \"download_url\": \"${DOWNLOAD_URL}\",
-              \"file_size\": \"${FILE_SIZE}\"
-            }" || true
+          APK_OBJECT="releases/v${VERSION}/password-vault.apk"
+          DOWNLOAD_URL="${COS_PUBLIC_BASE_URL%/}/${APK_OBJECT}"
 
+          jq -n \
+            --arg version "$VERSION" \
+            --argjson versionCode "$VERSION_CODE" \
+            --arg title "v${VERSION} 新版本" \
+            --arg releaseNotes "优化体验与修复已知问题" \
+            --arg downloadUrl "$DOWNLOAD_URL" \
+            --arg fileSize "$FILE_SIZE" \
+            --arg publishedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{version:$version,versionCode:$versionCode,title:$title,releaseNotes:$releaseNotes,downloadUrl:$downloadUrl,fileSize:$fileSize,forceUpdate:false,publishedAt:$publishedAt}' \
+            > build-output/latest.json
+
+          COS_ARGS=(
+            --init-skip=true
+            --secret-id "$COS_SECRET_ID"
+            --secret-key "$COS_SECRET_KEY"
+            --endpoint "cos.${COS_REGION}.myqcloud.com"
+          )
+
+          /tmp/coscli cp build-output/password-vault.apk "cos://${COS_BUCKET}/${APK_OBJECT}" "${COS_ARGS[@]}"
+          /tmp/coscli cp build-output/latest.json "cos://${COS_BUCKET}/releases/latest.json" "${COS_ARGS[@]}"
+
+          echo "已发布 APK: ${DOWNLOAD_URL}"
+          echo "版本清单: ${COS_PUBLIC_BASE_URL%/}/releases/latest.json"

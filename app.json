@@ -2,20 +2,20 @@
   "expo": {
     "name": "密码保险库",
     "slug": "password-vault",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.maple.passwordvault",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "infoPlist": {
         "NSFaceIDUsageDescription": "允许使用面容识别快速安全解锁密码保险库"
       }
     },
     "android": {
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#FFE8E0",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -40,7 +40,8 @@
         {
           "faceIDPermission": "允许使用面容识别解锁密码保险库"
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

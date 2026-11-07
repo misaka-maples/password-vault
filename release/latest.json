@@ -1,0 +1,9 @@
+{
+  "version": "1.0.5",
+  "versionCode": 6,
+  "title": "v1.0.5 当前版本",
+  "releaseNotes": "CloudBase 账号与加密备份、腾讯 COS 更新服务切换完成。",
+  "downloadUrl": "https://password-vault-releases-1323710248.cos.ap-shanghai.myqcloud.com/releases/v1.0.5/password-vault.apk",
+  "forceUpdate": false,
+  "publishedAt": "2026-11-07T07:25:00Z"
+}

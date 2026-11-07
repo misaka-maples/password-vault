@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../config/supabase';
-import { backupToSupabase, pullFromSupabase } from '../services/sync';
+import { cloudbaseAuth } from '../config/cloudbase';
+import { backupToCloudBase, pullFromCloudBase } from '../services/sync';
 import { getLastSyncTime } from '../services/storage';
 import { ResetConfirmModal } from '../components/ResetConfirmModal';
 import { RemovePasswordModal } from '../components/RemovePasswordModal';
@@ -42,8 +42,23 @@ function formatFriendlyError(err: any, defaultMsg = '操作失败，请重试'):
   if (raw.includes('Invalid login credentials')) {
     return '邮箱或登录密码不正确，请重新核对。';
   }
+  if (raw.includes('invalid_password') || raw.includes('not_found')) {
+    return '邮箱或登录密码不正确，请重新核对。';
+  }
   if (raw.includes('User already registered')) {
     return '该邮箱已被注册，请直接切换为登录模式。';
+  }
+  if (raw.includes('failed_precondition')) {
+    return '该邮箱已被注册，请直接切换为登录模式。';
+  }
+  if (raw.includes('invalid_argument')) {
+    return '验证码错误或已过期，请重新输入。';
+  }
+  if (raw.includes('resource_exhausted')) {
+    return '验证码发送过于频繁，请稍后再试。';
+  }
+  if (raw.includes('login_type_disabled')) {
+    return '云端邮箱登录方式尚未启用。';
   }
   if (raw.includes('timeout') || raw.includes('SocketTimeoutException') || raw.includes('超时')) {
     return '连接云端超时（超过 8 秒未响应），请检查网络环境或开启加速工具。';
@@ -79,7 +94,9 @@ export const ProfileScreen: React.FC<Props> = ({
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authOtp, setAuthOtp] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isAwaitingOtp, setIsAwaitingOtp] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -93,6 +110,9 @@ export const ProfileScreen: React.FC<Props> = ({
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
 
   const scrollViewRef = useRef<any>(null);
+  const pendingOtpVerifierRef = useRef<
+    ((params: { token: string | number }) => Promise<any>) | null
+  >(null);
 
   useEffect(() => {
     checkUser();
@@ -117,7 +137,8 @@ export const ProfileScreen: React.FC<Props> = ({
 
     // 2. 异步在后台静默验证 session 有效性
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await cloudbaseAuth.getUser();
+      if (error) throw error;
       if (user?.email) {
         setUserEmail(user.email);
         await AsyncStorage.setItem(CACHED_USER_EMAIL_KEY, user.email);
@@ -237,64 +258,47 @@ export const ProfileScreen: React.FC<Props> = ({
     setAuthLoading(true);
     try {
       if (isRegisterMode) {
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: cleanPassword,
-        });
-
-        if (error) {
-          if (
-            error.message.toLowerCase().includes('rate limit') ||
-            error.message.includes('over_email_send_rate_limit')
-          ) {
-            showDialog({
-              title: '邮件发送频率超限',
-              message:
-                '原因：云端默认开启了“邮件激活验证”，但免费内置邮件服务每小时仅限发 3 封邮件。\n\n👉 彻底解决办法：\n在控制台：【Authentication】➔【Providers】➔【Email】，把【Confirm email】取消勾选并保存！\n\n关闭后即可免去发邮件，直接秒级注册登录！',
-              icon: '📧',
-              iconBg: '#FFF9E6',
-              confirmText: '我知道了',
-            });
-            return;
+        if (isAwaitingOtp) {
+          const cleanOtp = authOtp.trim();
+          if (!cleanOtp || !pendingOtpVerifierRef.current) {
+            throw new Error('请输入邮箱中的验证码');
           }
-          throw error;
-        }
 
-        if (data.session) {
+          const { data, error } = await pendingOtpVerifierRef.current({ token: cleanOtp });
+          if (error) throw error;
+
           const email = data.user?.email || cleanEmail;
           setUserEmail(email);
           await AsyncStorage.setItem(CACHED_USER_EMAIL_KEY, email);
-          onShowToast('注册并自动登录成功！');
+          pendingOtpVerifierRef.current = null;
+          setIsAwaitingOtp(false);
+          setAuthOtp('');
+          setAuthPassword('');
+          onShowToast('验证成功，CloudBase 账号已创建');
         } else {
+          const { data, error } = await cloudbaseAuth.signUp({
+            email: cleanEmail,
+            password: cleanPassword,
+          });
+          if (error) throw error;
+          if (!data.verifyOtp) throw new Error('云端未返回验证码校验通道');
+
+          pendingOtpVerifierRef.current = data.verifyOtp;
+          setIsAwaitingOtp(true);
           showDialog({
-            title: '注册请求已发送',
-            message:
-              '账号已创建！如果登录时提示邮箱未激活，请在后台控制台【Authentication】➔【Providers】➔【Email】中关闭【Confirm email】，即可免验证直接登录。',
-            icon: '🎉',
+            title: '验证码已发送',
+            message: '请查收邮件，输入验证码后完成 CloudBase 账号注册。',
+            icon: '📧',
             iconBg: '#E8F5E9',
             confirmText: '我知道了',
           });
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await cloudbaseAuth.signInWithPassword({
           email: cleanEmail,
           password: cleanPassword,
         });
-
-        if (error) {
-          if (error.message.includes('Email not confirmed')) {
-            showDialog({
-              title: '登录提示：邮箱尚未激活',
-              message:
-                '该账号在注册时要求邮箱验证。请前往邮箱查收激活链接；\n\n💡 强烈建议：在控制台【Authentication】➔【Providers】➔【Email】中，把【Confirm email】勾选去掉并保存，即可免验证直接登录！',
-              icon: '✉️',
-              iconBg: '#FFF9E6',
-              confirmText: '我知道了',
-            });
-            return;
-          }
-          throw error;
-        }
+        if (error) throw error;
 
         const email = data.user?.email || cleanEmail;
         setUserEmail(email);
@@ -325,7 +329,7 @@ export const ProfileScreen: React.FC<Props> = ({
       confirmText: '退出登录',
       confirmType: 'danger',
       onConfirm: async () => {
-        await supabase.auth.signOut();
+        await cloudbaseAuth.signOut();
         await AsyncStorage.removeItem(CACHED_USER_EMAIL_KEY);
         setUserEmail(null);
         onShowToast('已退出登录');
@@ -361,7 +365,7 @@ export const ProfileScreen: React.FC<Props> = ({
 
     setSyncLoading(true);
     try {
-      const res = await backupToSupabase(masterKey);
+      const res = await backupToCloudBase(masterKey);
       if (res.success) {
         setLastSync(res.updatedAt || '刚刚');
         onShowToast('云端备份成功！');
@@ -409,7 +413,7 @@ export const ProfileScreen: React.FC<Props> = ({
       onConfirm: async () => {
         setSyncLoading(true);
         try {
-          const res = await pullFromSupabase();
+          const res = await pullFromCloudBase();
           if (res.success) {
             setLastSync(res.updatedAt || '刚刚');
             await onRefreshVault();
@@ -688,6 +692,23 @@ export const ProfileScreen: React.FC<Props> = ({
               }}
             />
 
+            {isRegisterMode && isAwaitingOtp && (
+              <TextInput
+                style={styles.input}
+                placeholder="请输入邮箱验证码"
+                placeholderTextColor="#A89A94"
+                value={authOtp}
+                onChangeText={setAuthOtp}
+                keyboardType="number-pad"
+                autoCapitalize="none"
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 120);
+                }}
+              />
+            )}
+
             <TouchableOpacity
               style={styles.authPrimaryBtn}
               onPress={handleAuth}
@@ -698,14 +719,23 @@ export const ProfileScreen: React.FC<Props> = ({
                 <ActivityIndicator color="#2B1E1C" />
               ) : (
                 <Text style={styles.authPrimaryBtnText}>
-                  {isRegisterMode ? '立即注册账号' : '登录云端'}
+                  {isRegisterMode
+                    ? isAwaitingOtp
+                      ? '验证并完成注册'
+                      : '发送验证码'
+                    : '登录云端'}
                 </Text>
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.switchAuthBtn}
-              onPress={() => setIsRegisterMode(!isRegisterMode)}
+              onPress={() => {
+                setIsRegisterMode(!isRegisterMode);
+                setIsAwaitingOtp(false);
+                setAuthOtp('');
+                pendingOtpVerifierRef.current = null;
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.switchAuthText}>

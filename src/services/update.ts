@@ -2,8 +2,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Platform, Linking } from 'react-native';
-import { supabase } from '../config/supabase';
 import { APP_VERSION, APP_BUILD_NUMBER } from '../config/version';
+
+const UPDATE_MANIFEST_URL = (process.env.EXPO_PUBLIC_UPDATE_MANIFEST_URL || '').trim();
+const UPDATE_REQUEST_TIMEOUT_MS = 8000;
 
 export interface AppReleaseInfo {
   version: string;
@@ -42,67 +44,75 @@ export function compareVersions(v1: string, v2: string): number {
 }
 
 /**
- * 检查应用版本更新（直接查询 Supabase 发版表）
+ * 检查应用版本更新（直接读取腾讯 COS 上的 latest.json）
  */
 export async function checkForUpdates(): Promise<CheckUpdateResult> {
-  try {
-    const { data, error } = await supabase
-      .from('app_releases')
-      .select('*')
-      .order('version_code', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!error && data) {
-      const release: AppReleaseInfo = {
-        version: data.version,
-        versionCode: data.version_code || 1,
-        title: data.title || `新版本 v${data.version}`,
-        releaseNotes: data.release_notes || '优化体验与修复已知问题',
-        downloadUrl: data.download_url,
-        fileSize: data.file_size || '33 MB',
-        forceUpdate: Boolean(data.force_update),
-        publishedAt: data.published_at,
-      };
-
-      const verDiff = compareVersions(release.version, APP_VERSION);
-      // 只有当云端版本号严格高于本地 (如 1.0.2 > 1.0.1)，
-      // 或主版本相同但内部构建号严格高于本地时才触发更新
-      const hasNew =
-        verDiff > 0 ||
-        (verDiff === 0 && release.versionCode > APP_BUILD_NUMBER);
-
-      return {
-        hasUpdate: hasNew,
-        release,
-        currentVersion: APP_VERSION,
-        message: hasNew ? '发现新版本' : `当前已是最新版本 (v${APP_VERSION})`,
-      };
-    }
-
-    if (error) {
-      return {
-        hasUpdate: false,
-        currentVersion: APP_VERSION,
-        message: `检查更新失败: ${error.message || '网络连接异常'}`,
-        error: error.message,
-      };
-    }
-
-    // 默认已是最新版本
+  if (!UPDATE_MANIFEST_URL) {
     return {
       hasUpdate: false,
       currentVersion: APP_VERSION,
-      message: `当前已是最新版本 (v${APP_VERSION})`,
+      message: '尚未配置 COS 更新清单地址',
+      error: '请配置 EXPO_PUBLIC_UPDATE_MANIFEST_URL',
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPDATE_REQUEST_TIMEOUT_MS);
+
+  try {
+    const separator = UPDATE_MANIFEST_URL.includes('?') ? '&' : '?';
+    const response = await fetch(`${UPDATE_MANIFEST_URL}${separator}t=${Date.now()}`, {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`COS 返回 HTTP ${response.status}`);
+    }
+
+    const raw = await response.json();
+    const version = String(raw.version || '').trim();
+    const downloadUrl = String(raw.downloadUrl || raw.download_url || '').trim();
+    const versionCode = Number(raw.versionCode ?? raw.version_code ?? 1);
+
+    if (!version || !downloadUrl || !Number.isFinite(versionCode)) {
+      throw new Error('COS latest.json 格式不完整');
+    }
+
+    const release: AppReleaseInfo = {
+      version,
+      versionCode,
+      title: raw.title || `新版本 v${version}`,
+      releaseNotes: raw.releaseNotes || raw.release_notes || '优化体验与修复已知问题',
+      downloadUrl,
+      fileSize: raw.fileSize || raw.file_size,
+      forceUpdate: Boolean(raw.forceUpdate ?? raw.force_update),
+      publishedAt: raw.publishedAt || raw.published_at,
+    };
+
+    const verDiff = compareVersions(release.version, APP_VERSION);
+    const hasNew =
+      verDiff > 0 ||
+      (verDiff === 0 && release.versionCode > APP_BUILD_NUMBER);
+
+    return {
+      hasUpdate: hasNew,
+      release,
+      currentVersion: APP_VERSION,
+      message: hasNew ? '发现新版本' : `当前已是最新版本 (v${APP_VERSION})`,
     };
   } catch (err: any) {
+    const message = err?.name === 'AbortError'
+      ? '连接 COS 超时（超过 8 秒）'
+      : err.message || '网络连接异常';
     return {
       hasUpdate: false,
       currentVersion: APP_VERSION,
-      message: `检查更新失败: ${err.message || '网络连接异常'}`,
-      error: err.message,
+      message: `检查更新失败: ${message}`,
+      error: message,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -117,25 +127,10 @@ export function getLocalApkUri(): string {
 }
 
 /**
- * 获取可用的下载候选地址列表（自动为 GitHub 直链添加国内高速镜像兜底）
+ * 获取可用的下载地址（COS 直链）
  */
 export function getCandidateDownloadUrls(url: string): string[] {
-  const trimmed = url.trim();
-  let cleanGithubUrl = '';
-  if (trimmed.includes('github.com/')) {
-    const parts = trimmed.split('github.com/');
-    cleanGithubUrl = `https://github.com/${parts[parts.length - 1]}`;
-  }
-
-  if (cleanGithubUrl) {
-    return [
-      `https://gh.con.sh/${cleanGithubUrl}`,
-      `https://gh-proxy.com/${cleanGithubUrl}`,
-      `https://ghproxy.net/${cleanGithubUrl}`,
-      cleanGithubUrl,
-    ];
-  }
-  return [trimmed];
+  return [url.trim()];
 }
 
 /**

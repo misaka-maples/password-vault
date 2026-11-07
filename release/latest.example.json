@@ -1,0 +1,10 @@
+{
+  "version": "1.0.6",
+  "versionCode": 7,
+  "title": "v1.0.6 新版本",
+  "releaseNotes": "优化体验与修复已知问题",
+  "downloadUrl": "https://password-vault-releases-1323710248.cos.ap-shanghai.myqcloud.com/releases/v1.0.6/password-vault.apk",
+  "fileSize": "25 MB",
+  "forceUpdate": false,
+  "publishedAt": "2026-11-07T08:00:00Z"
+}
